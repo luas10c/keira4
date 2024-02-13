@@ -1,0 +1,59 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:3000",
+    "distDir": "../dist",
+    "withGlobalTauri": false
+  },
+  "package": {
+    "productName": "Keira4",
+    "version": "0.0.1"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false
+    },
+    "windows": [
+      {
+        "decorations": false,
+        "transparent": true,
+        "title": "Keira4",
+        "label": "connection",
+        "center": true,
+        "width": 800,
+        "height": 600,
+        "minWidth": 800,
+        "minHeight": 600
+      },
+      {
+        "decorations": false,
+        "transparent": true,
+        "title": "Keira4",
+        "label": "main",
+        "center": true,
+        "width": 1200,
+        "height": 600,
+        "minWidth": 800,
+        "minHeight": 600,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "bundle": {
+      "active": true,
+      "targets": ["rpm"],
+      "category": "Games",
+      "identifier": "com.keira4",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    }
+  }
+}
