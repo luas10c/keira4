@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Light.ttf");
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Regular.ttf");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Medium.ttf");
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-SemiBold.ttf");
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Bold.ttf");
+  font-weight: 700;
+}
+
+body {
+  @apply select-none overflow-hidden min-h-screen bg-bunker-200;
+}
+
+#root {
+  @apply flex flex-col min-h-screen;
+}
