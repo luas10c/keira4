@@ -1,0 +1,28 @@
+[package]
+name = "keira4"
+version = "0.0.1"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+license = "UNLICENSED"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "2.0.4", features = [] }
+
+[dependencies]
+mysql_async = "0.35.0"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.134"
+tauri = { version = "2.2.0", features = [] }
+tauri-plugin-clipboard-manager = "2.2.0"
+tauri-plugin-positioner = "2.2.0"
+tauri-plugin-store = "2.2.0"
+tauri-plugin-updater = "2.3.0"
+tokio = { version = "1.42.0", features = ["full"] }
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
