@@ -1,0 +1,45 @@
+{
+  "name": "keira4",
+  "description": "Keira4 is a modern editor for AzerothCore and TrinityCore servers, making it easier to create, edit, and manage World of Warcraft private servers.",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:desktop": "tauri dev",
+    "build:desktop": "tauri build",
+    "dev:web": "npm run dev -w web",
+    "build:web": "npm run build -w web",
+    "lint": "eslint . --cache",
+    "lint:fix": "eslint . --cache --fix",
+    "test:ci:web": "npm run test:ci -w web",
+    "check:rust": "cargo check --workspace",
+    "fmt:rust": "cargo fmt --all -- --check",
+    "clippy:rust": "cargo clippy --workspace --all-targets -- -D warnings",
+    "check": "npm run lint && npm run build:web && npm run test:ci:web && npm run fmt:rust && npm run check:rust && npm run clippy:rust",
+    "prepare": "husky"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@eslint/js": "^9.39.4",
+    "@tauri-apps/cli": "^2.10.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-jest": "^29.15.1",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "eslint-plugin-testing-library": "^7.16.2",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "typescript-eslint": "^8.58.0"
+  },
+  "license": "MIT"
+}

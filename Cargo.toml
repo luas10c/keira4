@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = [
+  "apps/desktop"
+]
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+incremental = false
+debug = false
+strip = true  # Automatically strip symbols from the binary.
