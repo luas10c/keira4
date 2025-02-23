@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Light.ttf");
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Regular.ttf");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Medium.ttf");
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-SemiBold.ttf");
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Bold.ttf");
+  font-weight: 700;
+}
+
+@utility animate-shimmer {
+  animation: shimmer 1s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+
+  --container-8xl: 88rem;
+
+  --color-woodsmoke-50: #f1f1f1;
+  --color-woodsmoke-100: oklch(0.913 0.001 287.23);
+  --color-woodsmoke-200: oklch(0.836 0.003 286.72);
+  --color-woodsmoke-300: oklch(0.751 0.003 286.66);
+  --color-woodsmoke-400: oklch(0.674 0.004 286.48);
+  --color-woodsmoke-500: oklch(0.588 0.006 286.33);
+  --color-woodsmoke-600: oklch(0.501 0.006 286.27);
+  --color-woodsmoke-700: oklch(0.422 0.008 286.11);
+  --color-woodsmoke-800: oklch(0.2951 0.009 285.84);
+  --color-woodsmoke-900: oklch(0.257 0.006 286.06);
+  --color-woodsmoke-950: oklch(0.214 0.004 286.14);
+
+  --color-pelorous-50: oklch(95.93% 0.055 194.85);
+  --color-pelorous-100: oklch(92.71% 0.103 193.99);
+  --color-pelorous-200: oklch(85.5% 0.131 193.15);
+  --color-pelorous-300: oklch(79.65% 0.122 192.98);
+  --color-pelorous-400: oklch(73.71% 0.113 193.51);
+  --color-pelorous-500: oklch(67.34% 0.103 193.33);
+  --color-pelorous-600: oklch(58.4% 0.089 193.01);
+  --color-pelorous-700: oklch(49.12% 0.075 193.75);
+  --color-pelorous-800: oklch(39.7% 0.06 193.39);
+  --color-pelorous-900: oklch(31.43% 0.048 192.85);
+  --color-pelorous-950: oklch(26.36% 0.04 192.33);
+
+  --color-reef-50: oklch(99.03% 0.012 137.63);
+  --color-reef-100: oklch(97.14% 0.037 137.78);
+  --color-reef-200: oklch(94.14% 0.079 138.35);
+  --color-reef-300: oklch(91.18% 0.127 137.39);
+  --color-reef-400: oklch(79.79% 0.133 137.16);
+  --color-reef-500: oklch(68.75% 0.114 137.04);
+  --color-reef-600: oklch(57.76% 0.097 137.48);
+  --color-reef-700: oklch(46.62% 0.079 137.13);
+  --color-reef-800: oklch(35.55% 0.058 137.06);
+  --color-reef-900: oklch(24.53% 0.041 136.81);
+  --color-reef-950: oklch(19.42% 0.032 135.82);
+}
+
+@theme dark-minimal {
+  --color-background: oklch(21.43% 0.004 286.14);
+  --color-border: #000000;
+}
+
+@custom-variant dark-minimal (&:where(.dark-minimal, .dark-minimal *));
+
+body, #root {
+  @apply min-h-screen antialiased bg-woodsmoke-950 text-woodsmoke-100 select-none cursor-default overflow-hidden;
+}
+
+#root {
+  @apply h-full flex flex-col /* border-2 border-malachite-400 rounded-md */  overflow-hidden;
+}
+
+@utility highlight-keyword {
+  @apply text-cyan-400;
+}
+
+@utility highlight-number {
+  @apply text-pink-400;
+}
+
+@utility highlight-operator {
+  @apply text-amber-300;
+}
+
+@utility highlight-string {
+  @apply text-woodsmoke-300;
+}
+
+@utility highlight-comment {
+  display: block;
+  @apply text-woodsmoke-500;
+}
