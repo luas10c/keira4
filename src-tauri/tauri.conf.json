@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Keira4",
+  "mainBinaryName": "Keira4",
+  "version": "0.0.1",
+  "identifier": "com.keira4",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:3000"
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/luas10c/keira4/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkxOTFGNTBGOTYxQTE5ODAKUldTQUdScVdEL1dSa1JKcFB5WFdYUWs3dm9IRmZETjJFeXU5QS9UbnFsb1dmTjcxTjJCMlZOSEkK"
+    }
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "decorations": false,
+        "transparent": true,
+        "fullscreen": false,
+        "title": "Keira4",
+        "minHeight": 800,
+        "minWidth": 1200,
+        "center": true,
+        "height": 800,
+        "width": 1200
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Games",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true
+  }
+}
