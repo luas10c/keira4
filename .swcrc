@@ -1,0 +1,25 @@
+{
+  "$schema": "https://swc.rs/schema.json",
+  "jsc": {
+    "baseUrl": "./",
+    "parser": {
+      "syntax": "typescript"
+    },
+    "target": "es2022",
+    "transform": {
+      "react": {
+        "runtime": "automatic"
+      }
+    },
+
+    "paths": {
+      "#/*": ["./src/*"]
+    }
+  },
+  "module": {
+    "type": "es6",
+    "strict": true,
+    "importInterop": "swc",
+    "resolveFully": false
+  }
+}
