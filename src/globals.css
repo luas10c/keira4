@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Light.ttf");
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Regular.ttf");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Medium.ttf");
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-SemiBold.ttf");
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Bold.ttf");
+  font-weight: 700;
+}
+
+@utility animate-skeleton {
+  animation: shimmer 1s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+
+  --color-woodsmoke-50: #D6D5D7;
+  --color-woodsmoke-100: #C9C8CB;
+  --color-woodsmoke-200: #ACACAF;
+  --color-woodsmoke-300: #8E8C91;
+  --color-woodsmoke-400: #717075;
+  --color-woodsmoke-500: #565559;
+  --color-woodsmoke-600: #474649;
+  --color-woodsmoke-700: #3e3d40;
+  --color-woodsmoke-800: #262628;
+  --color-woodsmoke-900: #1e1e20;
+  --color-woodsmoke-950: #171719;
+
+  --color-pelorous-50: #edfdfe;
+  --color-pelorous-100: #d2f9fb;
+  --color-pelorous-200: #aaf1f7;
+  --color-pelorous-300: #70e5f0;
+  --color-pelorous-400: #2ecfe2;
+  --color-pelorous-500: #11a7bb;
+  --color-pelorous-600: #128fa8;
+  --color-pelorous-700: #167388;
+  --color-pelorous-800: #1b5d6f;
+  --color-pelorous-900: #1b4e5e;
+  --color-pelorous-950: #0c3240;
+
+  --color-thunderbird-50: #FFEBEB;
+  --color-thunderbird-100: #FFD6D6;
+  --color-thunderbird-200: #FFADAD;
+  --color-thunderbird-300: #FF8585;
+  --color-thunderbird-400: #FF5C5C;
+  --color-thunderbird-500: #FF3030;
+  --color-thunderbird-600: #F50000;
+  --color-thunderbird-700: #B80000;
+  --color-thunderbird-800: #7A0000;
+  --color-thunderbird-900: #3D0000;
+  --color-thunderbird-950: #1F0000;
+
+  --color-malachite-50: #EEFBEE;
+  --color-malachite-100: #DEF8DD;
+  --color-malachite-200: #BDF1BC;
+  --color-malachite-300: #9CE99A;
+  --color-malachite-400: #7AE279;
+  --color-malachite-500: #59DB57;
+  --color-malachite-600: #2ECA2B;
+  --color-malachite-700: #229720;
+  --color-malachite-800: #176516;
+  --color-malachite-900: #0B320B;
+  --color-malachite-950: #061905;
+}
+
+body, #root {
+  @apply min-h-screen antialiased bg-woodsmoke-950 select-none cursor-default overflow-hidden;
+}
+
+#root {
+  @apply h-full flex flex-col /* border-2 border-malachite-400 rounded-md */ overflow-hidden;
+}
+
+@utility highlight-keyword {
+  @apply text-cyan-400;
+}
+
+@utility highlight-number {
+  @apply text-pink-400;
+}
+
+@utility highlight-operator {
+  @apply text-amber-300;
+}
+
+@utility highlight-string {
+  @apply text-woodsmoke-300;
+}
+
+@utility highlight-comment {
+  display: block;
+  @apply text-woodsmoke-500;
+}
