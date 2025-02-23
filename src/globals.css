@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Light.ttf");
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Regular.ttf");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Medium.ttf");
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-SemiBold.ttf");
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Bold.ttf");
+  font-weight: 700;
+}
+
+@utility animate-skeleton {
+  animation: shimmer 1s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+
+  --container-8xl: 88rem;
+
+  --color-woodsmoke-50: #f1f1f1;
+  --color-woodsmoke-100: oklch(91.31% 0.001 287.23);
+  --color-woodsmoke-200: oklch(82.71% 0.003 286.71);
+  --color-woodsmoke-300: oklch(73.25% 0.004 286.51);
+  --color-woodsmoke-400: oklch(64.77% 0.004 286.46);
+  --color-woodsmoke-500: oklch(56.06% 0.008 286.24);
+  --color-woodsmoke-600: oklch(47.29% 0.008 286.17);
+  --color-woodsmoke-700: oklch(38.06% 0.007 286.15);
+  --color-woodsmoke-800: oklch(29.43% 0.005 286.13);
+  --color-woodsmoke-900: oklch(20.55% 0.004 286.11);
+  --color-woodsmoke-950: oklch(21.43% 0.004 286.14);
+
+  --color-pelorous-50: oklch(95.3% 0.034 212.8);
+  --color-pelorous-100: oklch(90.68% 0.071 209.27);
+  --color-pelorous-200: oklch(82.44% 0.113 207.45);
+  --color-pelorous-300: oklch(74.1% 0.101 207.57);
+  --color-pelorous-400: oklch(65.8% 0.09 207.62);
+  --color-pelorous-500: oklch(58.76% 0.081 207.25);
+  --color-pelorous-600: oklch(50.94% 0.07 208.33);
+  --color-pelorous-700: oklch(44.09% 0.06 207.89);
+  --color-pelorous-800: oklch(36.56% 0.05 207.08);
+  --color-pelorous-900: oklch(29.82% 0.041 208.12);
+  --color-pelorous-950: oklch(25.62% 0.035 204.38);
+}
+
+body, #root {
+  @apply min-h-screen antialiased bg-woodsmoke-950 select-none cursor-default overflow-hidden;
+}
+
+#root {
+  @apply h-full flex flex-col /* border-2 border-malachite-400 rounded-md */  overflow-hidden;
+}
+
+@utility highlight-keyword {
+  @apply text-cyan-400;
+}
+
+@utility highlight-number {
+  @apply text-pink-400;
+}
+
+@utility highlight-operator {
+  @apply text-amber-300;
+}
+
+@utility highlight-string {
+  @apply text-woodsmoke-300;
+}
+
+@utility highlight-comment {
+  display: block;
+  @apply text-woodsmoke-500;
+}
