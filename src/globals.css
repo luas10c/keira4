@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/Inter-Light.woff2');
+  font-display: swap;
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/Inter-Regular.woff2');
+  font-display: swap;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/Inter-Medium.woff2');
+  font-display: swap;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/Inter-SemiBold.woff2');
+  font-display: swap;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/Inter-Bold.woff2');
+  font-display: swap;
+  font-weight: 700;
+}
+
+@utility animate-shimmer {
+  animation: shimmer 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+
+  --container-8xl: 88rem;
+
+  --color-woodsmoke-50: #fafafa;
+  --color-woodsmoke-100: #f4f5f5;
+  --color-woodsmoke-200: #e5e6e6;
+  --color-woodsmoke-300: #d5d7d7;
+  --color-woodsmoke-400: #a3a8a8;
+  --color-woodsmoke-500: #737878;
+  --color-woodsmoke-600: #545959;
+  --color-woodsmoke-700: #404545;
+  --color-woodsmoke-800: #282929;
+  --color-woodsmoke-900: #1b1d1d;
+  --color-woodsmoke-950: #090b0b;
+
+  --color-pelorous-50: #eefcfd;
+  --color-pelorous-100: #d4f5f9;
+  --color-pelorous-200: #aee9f3;
+  --color-pelorous-300: #76d8ea;
+  --color-pelorous-400: #37bed9;
+  --color-pelorous-500: #1fb5d6;
+  --color-pelorous-600: #1a81a0;
+  --color-pelorous-700: #1c6882;
+  --color-pelorous-800: #1f566b;
+  --color-pelorous-900: #1e485b;
+  --color-pelorous-950: #0e2f3e;
+}
+
+@custom-variant dark-minimal (&:where(.dark-minimal, .dark-minimal *));
+
+body,
+#root {
+  @apply bg-woodsmoke-900 text-woodsmoke-50 min-h-screen cursor-default antialiased select-none;
+}
+
+#root {
+  @apply flex h-full flex-col;
+}
