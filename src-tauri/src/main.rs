@@ -54,6 +54,7 @@ fn main() {
     let identifier = ctx.config().identifier.clone();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
