@@ -9,10 +9,11 @@ use super::{AppConfig, AudioConfig, EditorConfig, UpdateConfig, WindowConfig};
 impl AppConfig {
     pub(super) fn from_table(table: &Table) -> Self {
         let defaults = Self::default();
+        let window_table = table.get("window").and_then(Value::as_table);
 
         Self {
             language: string_value(table, "language", &defaults.language),
-            theme: string_value(table, "theme", &defaults.theme),
+            theme: theme_value(table, window_table, &defaults.theme),
             audio: AudioConfig::from_table(
                 table.get("audio").and_then(Value::as_table),
             ),
@@ -158,6 +159,16 @@ fn string_value(table: &Table, key: &str, default: &str) -> String {
     table
         .get(key)
         .and_then(Value::as_str)
+        .unwrap_or(default)
+        .to_owned()
+}
+
+fn theme_value(root: &Table, window: Option<&Table>, default: &str) -> String {
+    root.get("theme")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            window.and_then(|table| table.get("theme")).and_then(Value::as_str)
+        })
         .unwrap_or(default)
         .to_owned()
 }

@@ -138,6 +138,8 @@ mod tests {
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
     };
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     fn unique_test_dir() -> PathBuf {
         let nanos = SystemTime::now()
@@ -288,6 +290,24 @@ mod tests {
     }
 
     #[test]
+    fn reads_theme_from_window_section() {
+        let dir = unique_test_dir();
+        let path = dir.join("config.toml");
+        fs::create_dir_all(&dir)
+            .expect("test config directory should be created");
+        fs::write(&path, "[window]\ntheme = \"minimal\"\n")
+            .expect("test config file should be written");
+
+        let config =
+            load_from_path(&path).expect("window theme should deserialize");
+
+        assert_eq!(config.theme, "minimal");
+
+        fs::remove_dir_all(&dir)
+            .expect("test config directory should be removed");
+    }
+
+    #[test]
     fn patches_single_config_key() {
         let dir = unique_test_dir();
         let path = dir.join("config.toml");
@@ -346,6 +366,41 @@ mod tests {
         assert_eq!(persisted.editor.tab_size, 4);
         assert_eq!(persisted.window.dialog_style, "native");
         assert_eq!(persisted.theme, "system");
+
+        fs::remove_dir_all(&dir)
+            .expect("test config directory should be removed");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn patches_config_when_target_file_is_read_only() {
+        let dir = unique_test_dir();
+        let path = dir.join("config.toml");
+        fs::create_dir_all(&dir)
+            .expect("test config directory should be created");
+        fs::write(&path, "theme = \"minimal\"\n")
+            .expect("test config file should be written");
+
+        let mut permissions = fs::metadata(&path)
+            .expect("test config metadata should exist")
+            .permissions();
+        permissions.set_mode(0o444);
+        fs::set_permissions(&path, permissions)
+            .expect("test config file should be set read-only");
+
+        let updated = patch_from_path(
+            &path,
+            &[ConfigPatch {
+                key: "theme".into(),
+                value: json!("midnight"),
+            }],
+        )
+        .expect("patching should replace read-only file atomically");
+
+        assert_eq!(updated.theme, "midnight");
+        let persisted = load_from_path(&path)
+            .expect("updated config should be readable");
+        assert_eq!(persisted.theme, "midnight");
 
         fs::remove_dir_all(&dir)
             .expect("test config directory should be removed");

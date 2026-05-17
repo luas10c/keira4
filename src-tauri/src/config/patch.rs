@@ -1,4 +1,8 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use serde_json::Value as JsonValue;
 use toml::{Table, Value};
@@ -57,10 +61,47 @@ fn write_to_path(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
     let content = toml::to_string_pretty(config)
         .map_err(|source| ConfigError::SerializeToml { source })?;
 
-    fs::write(path, content).map_err(|source| ConfigError::WriteFile {
-        path: path.to_path_buf(),
+    atomic_write(path, &content)
+}
+
+fn atomic_write(path: &Path, content: &str) -> Result<(), ConfigError> {
+    let Some(parent) = path.parent() else {
+        return fs::write(path, content).map_err(|source| ConfigError::WriteFile {
+            path: path.to_path_buf(),
+            source,
+        });
+    };
+
+    let temp_path = unique_temp_path(parent, path);
+
+    fs::write(&temp_path, content).map_err(|source| ConfigError::WriteFile {
+        path: temp_path.clone(),
         source,
-    })
+    })?;
+
+    match fs::rename(&temp_path, path) {
+        Ok(()) => Ok(()),
+        Err(source) => {
+            let _ = fs::remove_file(&temp_path);
+            Err(ConfigError::WriteFile {
+                path: path.to_path_buf(),
+                source,
+            })
+        }
+    }
+}
+
+fn unique_temp_path(parent: &Path, target: &Path) -> PathBuf {
+    let stem = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("config.toml");
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+
+    parent.join(format!(".{stem}.{nanos}.tmp"))
 }
 
 fn apply_patch(table: &mut Table, key: &str, value: Value) {
