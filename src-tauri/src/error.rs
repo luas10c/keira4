@@ -1,6 +1,46 @@
 use std::path::PathBuf;
 
+use serde::Serialize;
 use thiserror::Error;
+
+#[derive(Debug, Error, Serialize)]
+#[serde(tag = "kind", content = "detail")]
+pub enum SshError {
+    #[error("SSH authentication failed for user '{user}' at {host}:{port}")]
+    AuthFailed { user: String, host: String, port: u16 },
+    #[error("SSH host unreachable: {host}:{port} — {reason}")]
+    HostUnreachable { host: String, port: u16, reason: String },
+    #[error("SSH host key mismatch for {host} — connection refused for safety")]
+    HostKeyMismatch { host: String },
+    #[error("SSH private key not found: {path}")]
+    KeyFileNotFound { path: String },
+    #[error("SSH port forward refused: {local_port} -> {remote_host}:{remote_port}")]
+    PortForwardFailed {
+        local_port: u16,
+        remote_host: String,
+        remote_port: u16,
+    },
+    #[error("SSH error: {0}")]
+    Io(String),
+}
+
+#[derive(Debug, Error)]
+pub enum DbError {
+    #[error("Not connected to any database")]
+    NotConnected,
+    #[error("Already connected. Disconnect first.")]
+    AlreadyConnected,
+    #[error("MySQL error: {0}")]
+    MySql(#[from] mysql::Error),
+    #[error("Invalid value in column '{column}': {details}")]
+    ValueConversion { column: String, details: String },
+    #[error("Invalid identifier '{0}': only alphanumeric and underscore allowed")]
+    InvalidIdentifier(String),
+    #[error("Cannot order by column '{0}' because it is not included in the SELECT list")]
+    MissingOrderByColumn(String),
+    #[error("SSH tunnel error: {0}")]
+    SshTunnel(#[from] SshError),
+}
 
 #[derive(Debug, Error)]
 pub enum ConfigError {

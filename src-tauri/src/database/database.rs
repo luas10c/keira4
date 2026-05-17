@@ -3,64 +3,13 @@ use mysql::*;
 use mysql::{PoolConstraints, OptsBuilder, SslOpts, ClientIdentity};
 use std::time::Duration;
 use tokio::sync::Mutex;
-use thiserror::Error;
 use log::{error, info, warn};
 
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use serde::{Deserialize, Serialize};
-
-/// Structured SSH errors — each variant represents a distinct cause.
-/// Allow the front end to display accurate diagnostic messages.
-#[derive(Debug, Error, Serialize)]
-#[serde(tag = "kind", content = "detail")]
-pub enum SshError {
-    /// Autenticação rejeitada pelo servidor (senha ou chave inválida)
-    #[error("SSH authentication failed for user '{user}' at {host}:{port}")]
-    AuthFailed { user: String, host: String, port: u16 },
-
-    /// Timeout ou recusa de TCP antes do handshake SSH completar
-    #[error("SSH host unreachable: {host}:{port} — {reason}")]
-    HostUnreachable { host: String, port: u16, reason: String },
-
-    /// O fingerprint do host diverge do known_hosts — possível MITM
-    #[error("SSH host key mismatch for {host} — connection refused for safety")]
-    HostKeyMismatch { host: String },
-
-    /// Arquivo de chave privada não encontrado no caminho informado
-    #[error("SSH private key not found: {path}")]
-    KeyFileNotFound { path: String },
-
-    /// O servidor SSH recusou o port forward
-    #[error("SSH port forward refused: {local_port} -> {remote_host}:{remote_port}")]
-    PortForwardFailed { local_port: u16, remote_host: String, remote_port: u16 },
-
-    /// Outros erros de I/O ou de protocolo SSH não classificados
-    #[error("SSH error: {0}")]
-    Io(String),
-}
-
-#[derive(Debug, Error)]
-pub enum DbError {
-    #[error("Not connected to any database")]
-    NotConnected,
-
-    #[error("Already connected. Disconnect first.")]
-    AlreadyConnected,
-
-    #[error("MySQL error: {0}")]
-    MySql(#[from] mysql::Error),
-
-    #[error("Invalid value in column '{column}': {details}")]
-    ValueConversion { column: String, details: String },
-
-    #[error("Invalid identifier '{0}': only alphanumeric and underscore allowed")]
-    InvalidIdentifier(String),
-
-    #[error("SSH tunnel error: {0}")]
-    SshTunnel(#[from] SshError),
-}
+use crate::error::{DbError, SshError};
 
 pub type DbResult<T> = Result<T, DbError>;
 
@@ -116,9 +65,13 @@ pub enum OrderDir {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct QueryArgs {
     pub query: String,
-    pub page: u64,
+    #[serde(default)]
+    pub cursor: Option<String>,
+    #[serde(default = "default_query_limit")]
     pub limit: u64,
+    #[serde(default)]
     pub order_by: Option<String>,
+    #[serde(default)]
     pub order_dir: Option<OrderDir>,
 }
 
@@ -126,11 +79,13 @@ pub struct QueryArgs {
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Option<String>>>,
-    pub total_count: u64,
-    pub page: u64,
+    pub cursor: Option<String>,
+    #[serde(rename = "nextCursor")]
+    pub next_cursor: Option<String>,
     pub limit: u64,
-    pub total_pages: u64,
+    #[serde(rename = "hasNext")]
     pub has_next: bool,
+    #[serde(rename = "hasPrev")]
     pub has_prev: bool,
 }
 
@@ -150,6 +105,10 @@ impl OrderDir {
 }
 
 const MAX_PAGE_SIZE: u64 = 1_000;
+
+fn default_query_limit() -> u64 {
+    10
+}
 
 struct SshTunnel {
     _session: Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>,
@@ -314,49 +273,74 @@ impl Database {
     }
 
     pub async fn execute_query(&self, args: QueryArgs) -> DbResult<QueryResult> {
-        let limit = args.limit.min(MAX_PAGE_SIZE).max(1);
-        let offset = args.page * limit;
+        let requested_limit = if args.limit == 0 { default_query_limit() } else { args.limit };
+        let limit = requested_limit.min(MAX_PAGE_SIZE).max(1);
 
         let base_query = args.query.trim().trim_end_matches(';');
-
-        let count_sql = format!("SELECT COUNT(*) FROM ({}) AS _keira_count", base_query);
-
-        let order_clause = match &args.order_by {
-            Some(col) if !col.is_empty() => {
-                let dir = args.order_dir.unwrap_or(OrderDir::Asc).as_sql();
-                let safe_col = sanitize_identifier(col)?;
-                format!(" ORDER BY `{}` {}", safe_col, dir)
-            }
-            _ => String::new(),
+        let order_by = sanitize_identifier(args.order_by.as_deref().unwrap_or("id"))?;
+        let direction = args.order_dir.unwrap_or(OrderDir::Asc);
+        let comparator = match direction {
+            OrderDir::Asc => ">",
+            OrderDir::Desc => "<",
         };
+        let cursor_clause = args
+            .cursor
+            .as_deref()
+            .map(|cursor| {
+                format!(
+                    " WHERE `{}` {} '{}'",
+                    order_by,
+                    comparator,
+                    escape_sql_literal(cursor)
+                )
+            })
+            .unwrap_or_default();
 
-        let paged_sql = format!("{}{} LIMIT {} OFFSET {}", base_query, order_clause, limit, offset);
+        let paged_sql = format!(
+            "SELECT * FROM ({}) AS _keira_cursor{} ORDER BY `{}` {} LIMIT {}",
+            base_query,
+            cursor_clause,
+            order_by,
+            direction.as_sql(),
+            limit + 1
+        );
         info!("Query executed: {}", paged_sql);
 
         let mut conn = self.get_live_conn().await?;
 
         let start = std::time::Instant::now();
-        let total_count: u64 = conn.query_first(&count_sql).map_err(|e| {
-            error!("Count query failed: {} | query: {}", e, count_sql);
-            DbError::MySql(e)
-        })?.unwrap_or(0);
-        let (columns, rows) = fetch_rows(&mut conn, &paged_sql, limit as usize)?;
+        let (columns, mut rows) = fetch_rows(&mut conn, &paged_sql, limit as usize + 1)?;
         let elapsed = start.elapsed().as_millis();
         if elapsed > 500 {
             warn!("Slow query ({}ms): {}", elapsed, args.query);
         }
 
-        let total_pages = total_count.div_ceil(limit);
+        let has_next = rows.len() > limit as usize;
+        if has_next {
+            rows.pop();
+        }
+
+        let order_column_index = columns
+            .iter()
+            .position(|column| column == &order_by)
+            .ok_or_else(|| DbError::MissingOrderByColumn(order_by.clone()))?;
+        let next_cursor = if has_next {
+            rows
+                .last()
+                .and_then(|row| row.get(order_column_index))
+                .and_then(|value| value.clone())
+        } else {
+            None
+        };
 
         Ok(QueryResult {
             columns,
             rows,
-            total_count,
-            page: args.page,
+            cursor: args.cursor,
+            next_cursor,
             limit,
-            total_pages,
-            has_next: args.page + 1 < total_pages,
-            has_prev: args.page > 0,
+            has_next,
+            has_prev: false,
         })
     }
 
@@ -641,6 +625,10 @@ fn sanitize_identifier(name: &str) -> DbResult<String> {
     } else {
         Err(DbError::InvalidIdentifier(name.to_string()))
     }
+}
+
+fn escape_sql_literal(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
 fn value_to_string(v: Value) -> String {
