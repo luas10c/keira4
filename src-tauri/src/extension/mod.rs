@@ -2,8 +2,9 @@ mod discovery;
 mod marketplace;
 mod registry;
 
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 use std::{fs, path::{Path, PathBuf}};
-use std::collections::HashSet;
 
 use crate::error::ExtensionError;
 use serde::{Deserialize, Serialize};
@@ -42,7 +43,6 @@ pub struct InstalledTheme {
     pub identifier: String,
     pub label: String,
     pub path: String,
-    pub enabled: bool,
     pub selected: bool,
 }
 
@@ -67,6 +67,9 @@ pub struct InstalledExtension {
     pub description: Option<String>,
     pub kind: String,
     pub enabled: bool,
+    pub status: String,
+    #[serde(rename = "loadTimeMs")]
+    pub load_time_ms: Option<u128>,
     pub path: String,
     pub themes: Vec<ExtensionTheme>,
 }
@@ -121,6 +124,8 @@ pub struct ExtensionManifest {
 #[derive(Debug, Default)]
 pub struct ExtensionRuntimeState {
     pub loaded_extensions: Mutex<Option<Vec<LoadedExtension>>>,
+    pub loading: Mutex<bool>,
+    pub load_metrics: Mutex<HashMap<String, u128>>,
 }
 
 pub fn reset_runtime_state(runtime: &ExtensionRuntimeState) -> Result<(), ExtensionError> {
@@ -132,6 +137,22 @@ pub fn reset_runtime_state(runtime: &ExtensionRuntimeState) -> Result<(), Extens
             source: std::io::Error::other("extension runtime state lock poisoned"),
         })?;
     *state = None;
+    let mut loading = runtime
+        .loading
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    *loading = false;
+    let mut metrics = runtime
+        .load_metrics
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    metrics.clear();
     Ok(())
 }
 
@@ -175,22 +196,80 @@ pub fn extension_manifest_path(extension_dir: &Path) -> PathBuf {
 
 pub fn list_extensions<R: Runtime, M: Manager<R>>(
     manager: &M,
+    runtime: &ExtensionRuntimeState,
 ) -> Result<Vec<InstalledExtension>, ExtensionError> {
-    list_extensions_from_dir(&extensions_dir(manager)?)
-}
+    let mut installed = list_extensions_from_dir(&extensions_dir(manager)?)?;
 
-pub fn load_extensions<R: Runtime, M: Manager<R>>(
-    manager: &M,
-) -> Result<Vec<LoadedExtension>, ExtensionError> {
-    let target_dir = extensions_dir(manager)?;
-    load_extensions_from_dir(&target_dir)
+    let loading = *runtime
+        .loading
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    let loaded_ids: HashSet<String> = runtime
+        .loaded_extensions
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?
+        .as_ref()
+        .map(|extensions| extensions.iter().map(|item| item.id.clone()).collect())
+        .unwrap_or_default();
+    let metrics = runtime
+        .load_metrics
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+
+    for extension in &mut installed {
+        extension.load_time_ms = metrics.get(&extension.id).copied();
+        extension.status = if loading && extension.enabled {
+            "loading".to_owned()
+        } else if loaded_ids.contains(&extension.id) {
+            "loaded".to_owned()
+        } else {
+            "not_loaded".to_owned()
+        };
+    }
+
+    Ok(installed)
 }
 
 pub fn load_extensions_into_state<R: Runtime, M: Manager<R>>(
     manager: &M,
     runtime: &ExtensionRuntimeState,
 ) -> Result<Vec<LoadedExtension>, ExtensionError> {
-    let loaded = load_extensions(manager)?;
+    {
+        let mut loading = runtime
+            .loading
+            .lock()
+            .map_err(|_| ExtensionError::ReadFile {
+                path: PathBuf::from("extension runtime state"),
+                source: std::io::Error::other("extension runtime state lock poisoned"),
+            })?;
+        *loading = true;
+    }
+
+    let (loaded, metrics) = load_extensions_with_metrics(manager);
+
+    let loaded = match loaded {
+        Ok(loaded) => loaded,
+        Err(error) => {
+            let mut loading = runtime
+                .loading
+                .lock()
+                .map_err(|_| ExtensionError::ReadFile {
+                    path: PathBuf::from("extension runtime state"),
+                    source: std::io::Error::other("extension runtime state lock poisoned"),
+                })?;
+            *loading = false;
+            return Err(error);
+        }
+    };
     let mut state = runtime
         .loaded_extensions
         .lock()
@@ -199,7 +278,93 @@ pub fn load_extensions_into_state<R: Runtime, M: Manager<R>>(
             source: std::io::Error::other("extension runtime state lock poisoned"),
         })?;
     *state = Some(loaded.clone());
+    let mut stored_metrics = runtime
+        .load_metrics
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    *stored_metrics = metrics;
+    let mut loading = runtime
+        .loading
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    *loading = false;
     Ok(loaded)
+}
+
+fn load_extensions_with_metrics<R: Runtime, M: Manager<R>>(
+    manager: &M,
+) -> (Result<Vec<LoadedExtension>, ExtensionError>, HashMap<String, u128>) {
+    let target_dir = match extensions_dir(manager) {
+        Ok(dir) => dir,
+        Err(error) => return (Err(error), HashMap::new()),
+    };
+
+    let installed = match list_extensions_from_dir(&target_dir) {
+        Ok(items) => items,
+        Err(error) => return (Err(error), HashMap::new()),
+    };
+    let builtin = match builtin_marketplace(&target_dir) {
+        Ok(items) => items,
+        Err(error) => return (Err(error), HashMap::new()),
+    };
+
+    let mut loaded = Vec::new();
+    let mut metrics = HashMap::new();
+
+    for extension in builtin {
+        if !extension.enabled {
+            continue;
+        }
+        let started = Instant::now();
+        loaded.push(LoadedExtension {
+            id: extension.id.clone(),
+            identifier: extension.identifier,
+            publisher: extension.publisher,
+            verified: extension.verified,
+            name: extension.name,
+            version: extension.version,
+            description: extension.description,
+            kind: extension.kind,
+            builtin: true,
+            installed: true,
+            enabled: extension.enabled,
+            path: None,
+            themes: extension.themes,
+        });
+        metrics.insert(extension.id, started.elapsed().as_millis());
+    }
+
+    for extension in installed {
+        if !extension.enabled || loaded.iter().any(|item| item.id == extension.id) {
+            continue;
+        }
+        let started = Instant::now();
+        loaded.push(LoadedExtension {
+            id: extension.id.clone(),
+            identifier: identifier_from_extension_id(&extension.id),
+            publisher: extension.publisher,
+            verified: extension.verified,
+            name: extension.name,
+            version: extension.version,
+            description: extension.description,
+            kind: extension.kind,
+            builtin: false,
+            installed: true,
+            enabled: true,
+            path: Some(extension.path),
+            themes: extension.themes,
+        });
+        metrics.insert(extension.id, started.elapsed().as_millis());
+    }
+
+    loaded.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    (Ok(loaded), metrics)
 }
 
 pub fn set_extension_enabled<R: Runtime, M: Manager<R>>(
@@ -283,6 +448,59 @@ pub fn load_theme_colors_from_state(
         return Ok(ThemeColors { button: None });
     };
 
+    load_theme_colors_from_loaded(extensions, selected_identifier)
+}
+
+pub fn load_theme_colors_for_identifier<R: Runtime, M: Manager<R>>(
+    manager: &M,
+    selected_identifier: &str,
+) -> Result<ThemeColors, ExtensionError> {
+    let target_dir = extensions_dir(manager)?;
+
+    let mut loaded = Vec::new();
+    for extension in builtin_marketplace(&target_dir)? {
+        loaded.push(LoadedExtension {
+            id: extension.id,
+            identifier: extension.identifier,
+            publisher: extension.publisher,
+            verified: extension.verified,
+            name: extension.name,
+            version: extension.version,
+            description: extension.description,
+            kind: extension.kind,
+            builtin: true,
+            installed: true,
+            enabled: extension.enabled,
+            path: None,
+            themes: extension.themes,
+        });
+    }
+
+    for extension in list_extensions_from_dir(&target_dir)? {
+        loaded.push(LoadedExtension {
+            id: extension.id.clone(),
+            identifier: identifier_from_extension_id(&extension.id),
+            publisher: extension.publisher,
+            verified: extension.verified,
+            name: extension.name,
+            version: extension.version,
+            description: extension.description,
+            kind: extension.kind,
+            builtin: false,
+            installed: true,
+            enabled: extension.enabled,
+            path: Some(extension.path),
+            themes: extension.themes,
+        });
+    }
+
+    load_theme_colors_from_loaded(&loaded, selected_identifier)
+}
+
+fn load_theme_colors_from_loaded(
+    extensions: &[LoadedExtension],
+    selected_identifier: &str,
+) -> Result<ThemeColors, ExtensionError> {
     for extension in extensions {
         for theme in &extension.themes {
             if theme.identifier != selected_identifier {
@@ -357,6 +575,8 @@ pub(crate) fn installed_extension_from_manifest(
         description: manifest.description,
         kind: manifest.kind,
         enabled,
+        status: "not_loaded".into(),
+        load_time_ms: None,
         path: path.display().to_string(),
         themes: manifest.themes,
     }
@@ -547,7 +767,6 @@ fn list_themes_from_loaded(
                 identifier: theme.identifier.clone(),
                 label: theme.label.clone(),
                 path: theme.path.clone(),
-                enabled: extension.enabled,
                 selected,
             });
         }

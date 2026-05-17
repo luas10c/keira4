@@ -63,7 +63,8 @@ fn set_config_value(
 
 #[tauri::command]
 fn list_extensions(app: tauri::AppHandle) -> Result<Vec<InstalledExtension>, String> {
-    extension::list_extensions(&app).map_err(|error| error.to_string())
+    let runtime = app.state::<ExtensionRuntimeState>();
+    extension::list_extensions(&app, &runtime).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -110,6 +111,15 @@ fn load_theme_colors(
     let app_config = config::load_from_path(&config_path).map_err(|error| error.to_string())?;
 
     extension::load_theme_colors_from_state(&runtime, &app_config.theme)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn load_theme_colors_for_identifier(
+    app: tauri::AppHandle,
+    identifier: String,
+) -> Result<ThemeColors, String> {
+    extension::load_theme_colors_for_identifier(&app, &identifier)
         .map_err(|error| error.to_string())
 }
 
@@ -213,6 +223,7 @@ fn main() {
             reset_extensions_runtime,
             list_themes,
             load_theme_colors,
+            load_theme_colors_for_identifier,
             search_extensions,
             uninstall_extension,
             set_extension_enabled,
