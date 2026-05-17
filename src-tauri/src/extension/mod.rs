@@ -15,7 +15,7 @@ const EXTENSIONS_FILE: &str = "extensions.toml";
 const EXTENSION_MANIFEST_FILE: &str = "extension.toml";
 
 pub use discovery::list_extensions_from_dir;
-pub use marketplace::{builtin_marketplace, is_builtin_extension_id};
+pub use marketplace::{builtin_marketplace, builtin_theme_toml, is_builtin_extension_id};
 pub use registry::{remove_extension_state_in_dir, set_extension_enabled_in_dir};
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -44,6 +44,17 @@ pub struct InstalledTheme {
     pub path: String,
     pub enabled: bool,
     pub selected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ThemeButtonColors {
+    pub background: String,
+    pub foreground: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ThemeColors {
+    pub button: Option<ThemeButtonColors>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,6 +265,82 @@ pub fn resolve_theme_identifier_from_state(
     };
 
     resolve_theme_identifier_from_loaded(extensions, identifier)
+}
+
+pub fn load_theme_colors_from_state(
+    runtime: &ExtensionRuntimeState,
+    selected_identifier: &str,
+) -> Result<ThemeColors, ExtensionError> {
+    let state = runtime
+        .loaded_extensions
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+
+    let Some(extensions) = state.as_ref() else {
+        return Ok(ThemeColors { button: None });
+    };
+
+    for extension in extensions {
+        for theme in &extension.themes {
+            if theme.identifier != selected_identifier {
+                continue;
+            }
+
+            if extension.builtin {
+                return Ok(parse_theme_colors(
+                    builtin_theme_toml(&theme.identifier).unwrap_or(""),
+                ));
+            }
+
+            let Some(extension_path) = extension.path.as_deref() else {
+                return Ok(ThemeColors { button: None });
+            };
+
+            let theme_path = Path::new(extension_path).join(&theme.path);
+            let content = fs::read_to_string(&theme_path).map_err(|source| ExtensionError::ReadFile {
+                path: theme_path.clone(),
+                source,
+            })?;
+
+            return Ok(parse_theme_colors(&content));
+        }
+    }
+
+    Ok(ThemeColors { button: None })
+}
+
+fn parse_theme_colors(content: &str) -> ThemeColors {
+    let value = toml::from_str::<toml::Value>(content).ok();
+    let button = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("button"))
+        .and_then(extract_button_color);
+
+    ThemeColors { button }
+}
+
+fn extract_button_color(value: &toml::Value) -> Option<ThemeButtonColors> {
+    let table = if let Some(table) = value.as_table() {
+        Some(table)
+    } else {
+        value
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(toml::Value::as_table)
+    }?;
+
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+
+    Some(ThemeButtonColors {
+        background,
+        foreground,
+    })
 }
 
 pub(crate) fn installed_extension_from_manifest(

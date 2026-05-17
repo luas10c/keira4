@@ -9,6 +9,7 @@ use config::{AppConfig, AppConfigState};
 use extension::{
     ExtensionRuntimeState, ExtensionSearchResult, InstalledExtension, InstalledTheme, LoadedExtension,
     SearchExtensionsFilter,
+    ThemeColors,
 };
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
@@ -98,6 +99,18 @@ fn list_themes(
     let app_config = config::load_from_path(&config_path).map_err(|error| error.to_string())?;
 
     extension::list_themes_from_state(&runtime, &app_config.theme).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn load_theme_colors(
+    app: tauri::AppHandle,
+    runtime: tauri::State<'_, ExtensionRuntimeState>,
+) -> Result<ThemeColors, String> {
+    let config_path = config::config_path(&app).map_err(|error| error.to_string())?;
+    let app_config = config::load_from_path(&config_path).map_err(|error| error.to_string())?;
+
+    extension::load_theme_colors_from_state(&runtime, &app_config.theme)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -199,6 +212,7 @@ fn main() {
             load_extensions,
             reset_extensions_runtime,
             list_themes,
+            load_theme_colors,
             search_extensions,
             uninstall_extension,
             set_extension_enabled,

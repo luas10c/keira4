@@ -6,6 +6,18 @@ use crate::error::ExtensionError;
 
 use super::{registry, ExtensionManifest, ExtensionTheme};
 
+pub fn builtin_theme_toml(theme_identifier: &str) -> Option<&'static str> {
+    match theme_identifier {
+        "minimal" => Some(include_str!(
+            "builtin/keira.theme-minimal/themes/minimal.toml"
+        )),
+        "midnight" => Some(include_str!(
+            "builtin/keira.theme-midnight/themes/midnight.toml"
+        )),
+        _ => None,
+    }
+}
+
 #[derive(Clone, Copy)]
 struct BuiltinExtension {
     manifest: &'static str,
@@ -57,36 +69,10 @@ fn parse_builtin_manifest(manifest: &str) -> ExtensionManifest {
 fn builtin_extensions() -> &'static [BuiltinExtension] {
     &[
         BuiltinExtension {
-            manifest: r#"
-id = "keira.theme-minimal"
-publisher = "keira"
-verified = true
-name = "Minimal Theme"
-version = "1.0.0"
-description = "Clean minimal dark theme for Keira4."
-kind = "theme"
-
-[[themes]]
-id = "minimal"
-label = "Minimal"
-path = "themes/minimal.json"
-"#,
+            manifest: include_str!("builtin/keira.theme-minimal/extension.toml"),
         },
         BuiltinExtension {
-            manifest: r#"
-id = "keira.theme-midnight"
-publisher = "keira"
-verified = true
-name = "Midnight Theme"
-version = "1.0.0"
-description = "Deep blue dark theme for Keira4."
-kind = "theme"
-
-[[themes]]
-id = "midnight"
-label = "Midnight"
-path = "themes/midnight.json"
-"#,
+            manifest: include_str!("builtin/keira.theme-midnight/extension.toml"),
         },
     ]
 }

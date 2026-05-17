@@ -1,0 +1,12 @@
+id = "keira.theme-midnight"
+publisher = "keira"
+verified = true
+name = "Midnight Theme"
+version = "1.0.0"
+description = "Deep blue dark theme for Keira4."
+kind = "theme"
+
+[[themes]]
+id = "midnight"
+label = "Midnight"
+path = "themes/midnight.toml"

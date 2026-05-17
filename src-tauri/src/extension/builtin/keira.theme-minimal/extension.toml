@@ -1,0 +1,12 @@
+id = "keira.theme-minimal"
+publisher = "keira"
+verified = true
+name = "Minimal Theme"
+version = "1.0.0"
+description = "Clean minimal dark theme for Keira4."
+kind = "theme"
+
+[[themes]]
+id = "minimal"
+label = "Minimal"
+path = "themes/minimal.toml"
