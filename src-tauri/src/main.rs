@@ -7,7 +7,7 @@ mod error;
 
 use config::{AppConfig, AppConfigState};
 use extension::{
-    ExtensionSearchResult, InstalledExtension, InstalledTheme, LoadedExtension,
+    ExtensionRuntimeState, ExtensionSearchResult, InstalledExtension, InstalledTheme, LoadedExtension,
     SearchExtensionsFilter,
 };
 use tauri::Manager;
@@ -66,8 +66,18 @@ fn list_extensions(app: tauri::AppHandle) -> Result<Vec<InstalledExtension>, Str
 }
 
 #[tauri::command]
-fn load_extensions(app: tauri::AppHandle) -> Result<Vec<LoadedExtension>, String> {
-    extension::load_extensions(&app).map_err(|error| error.to_string())
+fn load_extensions(
+    app: tauri::AppHandle,
+    runtime: tauri::State<'_, ExtensionRuntimeState>,
+) -> Result<Vec<LoadedExtension>, String> {
+    extension::load_extensions_into_state(&app, &runtime).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn reset_extensions_runtime(
+    runtime: tauri::State<'_, ExtensionRuntimeState>,
+) -> Result<(), String> {
+    extension::reset_runtime_state(&runtime).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -80,11 +90,14 @@ fn search_extensions(
 }
 
 #[tauri::command]
-fn list_themes(app: tauri::AppHandle) -> Result<Vec<InstalledTheme>, String> {
+fn list_themes(
+    app: tauri::AppHandle,
+    runtime: tauri::State<'_, ExtensionRuntimeState>,
+) -> Result<Vec<InstalledTheme>, String> {
     let config_path = config::config_path(&app).map_err(|error| error.to_string())?;
     let app_config = config::load_from_path(&config_path).map_err(|error| error.to_string())?;
 
-    extension::list_themes(&app, &app_config.theme).map_err(|error| error.to_string())
+    extension::list_themes_from_state(&runtime, &app_config.theme).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -110,9 +123,10 @@ fn set_extension_enabled(
 fn select_theme(
     app: tauri::AppHandle,
     config: tauri::State<'_, AppConfigState>,
+    runtime: tauri::State<'_, ExtensionRuntimeState>,
     identifier: String,
 ) -> Result<AppConfig, String> {
-    let resolved_theme_id = extension::resolve_theme_id(&app, &identifier)
+    let resolved_theme_id = extension::resolve_theme_identifier_from_state(&runtime, &identifier)
         .map_err(|error| error.to_string())?;
     let config_path = config::config_path(&app).map_err(|error| error.to_string())?;
     let updated = config::patch_from_path(
@@ -165,6 +179,7 @@ fn main() {
             let app_config = config::load_from_path(&config_path)?;
 
             app.manage(AppConfigState(std::sync::Mutex::new(app_config)));
+            app.manage(ExtensionRuntimeState::default());
 
             #[cfg(desktop)]
             let _ = app.handle().plugin(tauri_plugin_positioner::init());
@@ -182,6 +197,7 @@ fn main() {
             set_config_value,
             list_extensions,
             load_extensions,
+            reset_extensions_runtime,
             list_themes,
             search_extensions,
             uninstall_extension,

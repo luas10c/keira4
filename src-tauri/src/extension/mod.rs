@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use crate::error::ExtensionError;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, Runtime};
+use std::sync::Mutex;
 
 const EXTENSIONS_DIR: &str = "extensions";
 const EXTENSIONS_FILE: &str = "extensions.toml";
@@ -106,6 +107,23 @@ pub struct ExtensionManifest {
     pub themes: Vec<ExtensionTheme>,
 }
 
+#[derive(Debug, Default)]
+pub struct ExtensionRuntimeState {
+    pub loaded_extensions: Mutex<Option<Vec<LoadedExtension>>>,
+}
+
+pub fn reset_runtime_state(runtime: &ExtensionRuntimeState) -> Result<(), ExtensionError> {
+    let mut state = runtime
+        .loaded_extensions
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    *state = None;
+    Ok(())
+}
+
 impl Default for ExtensionManifest {
     fn default() -> Self {
         Self {
@@ -157,6 +175,22 @@ pub fn load_extensions<R: Runtime, M: Manager<R>>(
     load_extensions_from_dir(&target_dir)
 }
 
+pub fn load_extensions_into_state<R: Runtime, M: Manager<R>>(
+    manager: &M,
+    runtime: &ExtensionRuntimeState,
+) -> Result<Vec<LoadedExtension>, ExtensionError> {
+    let loaded = load_extensions(manager)?;
+    let mut state = runtime
+        .loaded_extensions
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+    *state = Some(loaded.clone());
+    Ok(loaded)
+}
+
 pub fn set_extension_enabled<R: Runtime, M: Manager<R>>(
     manager: &M,
     extension_id: &str,
@@ -182,20 +216,44 @@ pub fn search_extensions<R: Runtime, M: Manager<R>>(
     search_extensions_in_dir(&target_dir, filter)
 }
 
-pub fn list_themes<R: Runtime, M: Manager<R>>(
-    manager: &M,
+pub fn list_themes_from_state(
+    runtime: &ExtensionRuntimeState,
     selected_theme: &str,
 ) -> Result<Vec<InstalledTheme>, ExtensionError> {
-    let target_dir = extensions_dir(manager)?;
-    list_themes_from_dir(&target_dir, selected_theme)
+    let state = runtime
+        .loaded_extensions
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+
+    let Some(extensions) = state.as_ref() else {
+        return Ok(Vec::new());
+    };
+
+    list_themes_from_loaded(extensions, selected_theme)
 }
 
-pub fn resolve_theme_id<R: Runtime, M: Manager<R>>(
-    manager: &M,
-    theme: &str,
+pub fn resolve_theme_identifier_from_state(
+    runtime: &ExtensionRuntimeState,
+    identifier: &str,
 ) -> Result<String, ExtensionError> {
-    let target_dir = extensions_dir(manager)?;
-    resolve_theme_identifier_from_dir(&target_dir, theme)
+    let state = runtime
+        .loaded_extensions
+        .lock()
+        .map_err(|_| ExtensionError::ReadFile {
+            path: PathBuf::from("extension runtime state"),
+            source: std::io::Error::other("extension runtime state lock poisoned"),
+        })?;
+
+    let Some(extensions) = state.as_ref() else {
+        return Err(ExtensionError::ThemeNotFound {
+            theme: identifier.to_owned(),
+        });
+    };
+
+    resolve_theme_identifier_from_loaded(extensions, identifier)
 }
 
 pub(crate) fn installed_extension_from_manifest(
@@ -379,22 +437,29 @@ pub(crate) fn list_themes_from_dir(
     selected_theme: &str,
 ) -> Result<Vec<InstalledTheme>, ExtensionError> {
     let extensions = load_extensions_from_dir(extensions_dir)?;
+    list_themes_from_loaded(&extensions, selected_theme)
+}
+
+fn list_themes_from_loaded(
+    extensions: &[LoadedExtension],
+    selected_theme: &str,
+) -> Result<Vec<InstalledTheme>, ExtensionError> {
     let mut seen_identifiers = HashSet::new();
     let mut themes = Vec::new();
 
     for extension in extensions {
-        for theme in extension.themes {
+        for theme in &extension.themes {
             if !seen_identifiers.insert(theme.identifier.clone()) {
                 return Err(ExtensionError::DuplicateThemeIdentifier {
-                    identifier: theme.identifier,
+                    identifier: theme.identifier.clone(),
                 });
             }
 
             let selected = theme.identifier == selected_theme;
             themes.push(InstalledTheme {
-                identifier: theme.identifier,
-                label: theme.label,
-                path: theme.path,
+                identifier: theme.identifier.clone(),
+                label: theme.label.clone(),
+                path: theme.path.clone(),
                 enabled: extension.enabled,
                 selected,
             });
@@ -411,18 +476,25 @@ pub(crate) fn resolve_theme_identifier_from_dir(
     identifier: &str,
 ) -> Result<String, ExtensionError> {
     let extensions = load_extensions_from_dir(extensions_dir)?;
+    resolve_theme_identifier_from_loaded(&extensions, identifier)
+}
+
+fn resolve_theme_identifier_from_loaded(
+    extensions: &[LoadedExtension],
+    identifier: &str,
+) -> Result<String, ExtensionError> {
     let mut seen_identifiers = HashSet::new();
 
     for extension in extensions {
-        for extension_theme in extension.themes {
+        for extension_theme in &extension.themes {
             if !seen_identifiers.insert(extension_theme.identifier.clone()) {
                 return Err(ExtensionError::DuplicateThemeIdentifier {
-                    identifier: extension_theme.identifier,
+                    identifier: extension_theme.identifier.clone(),
                 });
             }
 
             if extension_theme.identifier == identifier {
-                return Ok(extension_theme.identifier);
+                return Ok(extension_theme.identifier.clone());
             }
         }
     }
