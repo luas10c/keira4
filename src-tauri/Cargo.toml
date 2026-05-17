@@ -12,7 +12,8 @@ license = "MIT"
 tauri-build = { version = "2.6.1", features = [] }
 
 [dependencies]
-keyring = "4.0.0"
+keyring = "4.0.1"
+keyring-core = "1.0.0"
 log = "0.4.29"
 mysql = { version = "28.0.0", features = ["rustls-tls-ring"] }
 russh = "0.60.2"

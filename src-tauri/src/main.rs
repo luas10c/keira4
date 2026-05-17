@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod database;
 mod extension;
 mod error;
 mod lsp;
@@ -230,6 +231,9 @@ fn main() {
             let app_config = config::load_from_path(&config_path)?;
 
             app.manage(AppConfigState(std::sync::Mutex::new(app_config)));
+            app.manage(database::AppState {
+                database: database::Database::new(),
+            });
             app.manage(ExtensionRuntimeState::default());
             app.manage(lsp::LspRuntimeState::default());
 
@@ -251,6 +255,17 @@ fn main() {
             lsp_start,
             lsp_stop,
             lsp_status,
+            database::connect,
+            database::disconnect,
+            database::execute_query,
+            database::execute_mutation,
+            database::is_connected,
+            database::get_databases,
+            database::get_tables,
+            database::connect_saved,
+            database::save_connection,
+            database::list_connections,
+            database::delete_connection,
             list_extensions,
             load_extensions,
             reset_extensions_runtime,
