@@ -4,6 +4,7 @@
 mod config;
 mod extension;
 mod error;
+mod lsp;
 
 use config::{AppConfig, AppConfigState};
 use extension::{
@@ -13,6 +14,33 @@ use extension::{
 };
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
+
+#[tauri::command]
+fn lsp_configure_session(
+    lsp: tauri::State<'_, lsp::LspRuntimeState>,
+    session: lsp::LspSessionConfig,
+) -> Result<lsp::LspStatus, String> {
+    lsp::configure_session(&lsp, session)
+}
+
+#[tauri::command]
+fn lsp_start(
+    lsp: tauri::State<'_, lsp::LspRuntimeState>,
+    command: String,
+    args: Option<Vec<String>>,
+) -> Result<lsp::LspStatus, String> {
+    lsp::start(&lsp, command, args)
+}
+
+#[tauri::command]
+fn lsp_stop(lsp: tauri::State<'_, lsp::LspRuntimeState>) -> Result<lsp::LspStatus, String> {
+    lsp::stop(&lsp)
+}
+
+#[tauri::command]
+fn lsp_status(lsp: tauri::State<'_, lsp::LspRuntimeState>) -> Result<lsp::LspStatus, String> {
+    lsp::status(&lsp)
+}
 
 #[tauri::command]
 fn load_config(
@@ -203,6 +231,7 @@ fn main() {
 
             app.manage(AppConfigState(std::sync::Mutex::new(app_config)));
             app.manage(ExtensionRuntimeState::default());
+            app.manage(lsp::LspRuntimeState::default());
 
             #[cfg(desktop)]
             let _ = app.handle().plugin(tauri_plugin_positioner::init());
@@ -218,6 +247,10 @@ fn main() {
             load_config,
             patch_config,
             set_config_value,
+            lsp_configure_session,
+            lsp_start,
+            lsp_stop,
+            lsp_status,
             list_extensions,
             load_extensions,
             reset_extensions_runtime,
