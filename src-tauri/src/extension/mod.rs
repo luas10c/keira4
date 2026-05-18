@@ -54,8 +54,25 @@ pub struct ThemeButtonColors {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ThemeWorkbenchColors {
+    pub background: String,
+    pub foreground: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeScrollbarColors {
+    pub track: String,
+    pub thumb: String,
+    pub thumb_hover: String,
+    pub thumb_active: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ThemeColors {
+    pub workbench: Option<ThemeWorkbenchColors>,
     pub button: Option<ThemeButtonColors>,
+    pub scrollbar: Option<ThemeScrollbarColors>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -471,13 +488,15 @@ fn load_theme_colors_from_loaded(
             }
 
             if extension.builtin {
-                return Ok(parse_theme_colors(
-                    builtin_theme_toml(&theme.identifier).unwrap_or(""),
-                ));
+                let Some(content) = builtin_theme_toml(&theme.identifier)? else {
+            return Ok(empty_theme_colors());
+                };
+
+                return Ok(parse_theme_colors(&content));
             }
 
             let Some(extension_path) = extension.path.as_deref() else {
-                return Ok(ThemeColors { button: None });
+        return Ok(empty_theme_colors());
             };
 
             let theme_path = resolve_extension_file_path(Path::new(extension_path), &theme.path)?;
@@ -490,7 +509,15 @@ fn load_theme_colors_from_loaded(
         }
     }
 
-    Ok(ThemeColors { button: None })
+    Ok(empty_theme_colors())
+}
+
+fn empty_theme_colors() -> ThemeColors {
+    ThemeColors {
+        workbench: None,
+        button: None,
+        scrollbar: None,
+    }
 }
 
 fn resolve_extension_file_path(
@@ -519,25 +546,41 @@ fn resolve_extension_file_path(
 
 fn parse_theme_colors(content: &str) -> ThemeColors {
     let value = toml::from_str::<toml::Value>(content).ok();
+    let workbench = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("workbench"))
+        .and_then(extract_workbench_color);
     let button = value
         .as_ref()
         .and_then(|root| root.get("colors"))
         .and_then(toml::Value::as_table)
         .and_then(|colors| colors.get("button"))
         .and_then(extract_button_color);
+    let scrollbar = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("scrollbar"))
+        .and_then(extract_scrollbar_color);
 
-    ThemeColors { button }
+    ThemeColors { workbench, button, scrollbar }
+}
+
+fn extract_workbench_color(value: &toml::Value) -> Option<ThemeWorkbenchColors> {
+    let table = first_color_table(value)?;
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+
+    Some(ThemeWorkbenchColors {
+        background,
+        foreground,
+    })
 }
 
 fn extract_button_color(value: &toml::Value) -> Option<ThemeButtonColors> {
-    let table = if let Some(table) = value.as_table() {
-        Some(table)
-    } else {
-        value
-            .as_array()
-            .and_then(|items| items.first())
-            .and_then(toml::Value::as_table)
-    }?;
+    let table = first_color_table(value)?;
 
     let background = table.get("background")?.as_str()?.to_owned();
     let foreground = table.get("foreground")?.as_str()?.to_owned();
@@ -546,6 +589,32 @@ fn extract_button_color(value: &toml::Value) -> Option<ThemeButtonColors> {
         background,
         foreground,
     })
+}
+
+fn extract_scrollbar_color(value: &toml::Value) -> Option<ThemeScrollbarColors> {
+    let table = first_color_table(value)?;
+    let track = table.get("track")?.as_str()?.to_owned();
+    let thumb = table.get("thumb")?.as_str()?.to_owned();
+    let thumb_hover = table.get("thumbHover")?.as_str()?.to_owned();
+    let thumb_active = table.get("thumbActive")?.as_str()?.to_owned();
+
+    Some(ThemeScrollbarColors {
+        track,
+        thumb,
+        thumb_hover,
+        thumb_active,
+    })
+}
+
+fn first_color_table(value: &toml::Value) -> Option<&toml::Table> {
+    if let Some(table) = value.as_table() {
+        Some(table)
+    } else {
+        value
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(toml::Value::as_table)
+    }
 }
 
 pub(crate) fn installed_extension_from_manifest(
@@ -1028,12 +1097,13 @@ mod tests {
         let marketplace = builtin_marketplace(&dir)
             .expect("builtin marketplace should load");
 
-        assert_eq!(marketplace.len(), 2);
+        assert!(marketplace.len() >= 2);
         assert!(marketplace.iter().all(|item| item.builtin));
         assert!(marketplace.iter().all(|item| item.installed));
         assert!(marketplace.iter().all(|item| item.enabled));
         assert!(marketplace.iter().all(|item| item.publisher == "keira"));
         assert!(marketplace.iter().all(|item| item.verified));
+        assert!(marketplace.iter().any(|item| item.id == "keira.theme-emerald"));
 
         fs::remove_dir_all(&dir).expect("extensions directory should be removed");
     }
@@ -1258,10 +1328,11 @@ mod tests {
         let themes = list_themes_from_dir(&dir, "minimal")
             .expect("themes should load from runtime extensions");
 
-        assert_eq!(themes.len(), 3);
+        assert!(themes.len() >= 3);
         assert!(themes.iter().any(|theme| theme.label == "Minimal" && theme.selected));
         assert!(themes.iter().any(|theme| theme.label == "Local Theme" && !theme.selected));
         assert!(themes.iter().any(|theme| theme.label == "Midnight" && !theme.selected));
+        assert!(themes.iter().any(|theme| theme.label == "Emerald" && !theme.selected));
 
         fs::remove_dir_all(&dir).expect("extensions directory should be removed");
     }

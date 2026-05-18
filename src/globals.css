@@ -89,9 +89,18 @@
 
 @custom-variant dark-minimal (&:where(.dark-minimal, .dark-minimal *));
 
+.scrollbar.os-scrollbar {
+  --os-track-bg: var(--scrollbar-track, transparent);
+  --os-track-bg-hover: var(--scrollbar-track, transparent);
+  --os-track-bg-active: var(--scrollbar-track, transparent);
+  --os-handle-bg: var(--scrollbar-thumb, rgba(255, 255, 255, 0.24));
+  --os-handle-bg-hover: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.36));
+  --os-handle-bg-active: var(--scrollbar-thumb-active, rgba(255, 255, 255, 0.48));
+}
+
 body,
 #root {
-  @apply bg-woodsmoke-900 text-woodsmoke-50 min-h-screen cursor-default antialiased select-none;
+  @apply bg-[var(--workbench-background)] text-[var(--workbench-foreground)] min-h-screen cursor-default antialiased select-none;
 }
 
 #root {

@@ -1,3 +1,13 @@
+[[colors.workbench]]
+background = "#1b1d1d"
+foreground = "#eefcfd"
+
 [[colors.button]]
 background = "#1fb5d6"
 foreground = "#090b0b"
+
+[[colors.scrollbar]]
+track = "#1b1d1d"
+thumb = "#2f3635"
+thumbHover = "#3d4745"
+thumbActive = "#4b5754"

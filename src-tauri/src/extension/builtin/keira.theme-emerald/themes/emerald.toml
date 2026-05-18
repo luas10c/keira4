@@ -3,7 +3,7 @@ background = "#1b1d1d"
 foreground = "#eefcfd"
 
 [[colors.button]]
-background = "#9882d0"
+background = "#38C172"
 foreground = "#090b0b"
 
 [[colors.scrollbar]]
