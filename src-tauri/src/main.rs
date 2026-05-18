@@ -121,25 +121,21 @@ fn search_extensions(
 }
 
 #[tauri::command]
-fn list_themes(
-    app: tauri::AppHandle,
-    runtime: tauri::State<'_, ExtensionRuntimeState>,
-) -> Result<Vec<InstalledTheme>, String> {
+fn list_themes(app: tauri::AppHandle) -> Result<Vec<InstalledTheme>, String> {
     let config_path = config::config_path(&app).map_err(|error| error.to_string())?;
     let app_config = config::load_from_path(&config_path).map_err(|error| error.to_string())?;
+    let extensions_dir = extension::extensions_dir(&app).map_err(|error| error.to_string())?;
 
-    extension::list_themes_from_state(&runtime, &app_config.theme).map_err(|error| error.to_string())
+    extension::list_themes_from_dir(&extensions_dir, &app_config.theme)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn load_theme_colors(
-    app: tauri::AppHandle,
-    runtime: tauri::State<'_, ExtensionRuntimeState>,
-) -> Result<ThemeColors, String> {
+fn load_theme_colors(app: tauri::AppHandle) -> Result<ThemeColors, String> {
     let config_path = config::config_path(&app).map_err(|error| error.to_string())?;
     let app_config = config::load_from_path(&config_path).map_err(|error| error.to_string())?;
 
-    extension::load_theme_colors_from_state(&runtime, &app_config.theme)
+    extension::load_theme_colors_for_identifier(&app, &app_config.theme)
         .map_err(|error| error.to_string())
 }
 
@@ -179,6 +175,10 @@ fn select_theme(
     identifier: String,
 ) -> Result<AppConfig, String> {
     let resolved_theme_id = extension::resolve_theme_identifier_from_state(&runtime, &identifier)
+        .or_else(|_| {
+            let extensions_dir = extension::extensions_dir(&app)?;
+            extension::resolve_theme_identifier_from_dir(&extensions_dir, &identifier)
+        })
         .map_err(|error| error.to_string())?;
     let config_path = config::config_path(&app).map_err(|error| error.to_string())?;
     let updated = config::patch_from_path(

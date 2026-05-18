@@ -354,6 +354,7 @@ impl Database {
 
     pub async fn get_tables(&self, database: &str) -> DbResult<Vec<String>> {
         let mut conn = self.get_live_conn().await?;
+        let database = sanitize_identifier(database)?;
         let tables: Vec<String> = conn.query(format!("SHOW TABLES FROM `{}`", database))?;
         Ok(tables)
     }
@@ -647,5 +648,23 @@ fn value_to_string(v: Value) -> String {
             format!("{}{}:{:02}:{:02}.{:06}", sign, days * 24 + h as u32, min, s, ms)
         }
         Value::NULL => String::from("NULL"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_identifier;
+
+    #[test]
+    fn accepts_safe_sql_identifiers() {
+        assert_eq!(sanitize_identifier("db_01").unwrap(), "db_01");
+        assert_eq!(sanitize_identifier("users").unwrap(), "users");
+    }
+
+    #[test]
+    fn rejects_unsafe_sql_identifiers() {
+        assert!(sanitize_identifier("db-name").is_err());
+        assert!(sanitize_identifier("db name").is_err());
+        assert!(sanitize_identifier("db`; DROP TABLE users; --").is_err());
     }
 }

@@ -28,6 +28,7 @@ pub struct SearchExtensionsFilter {
     pub builtin: Option<bool>,
     pub kind: Option<String>,
     pub identifier: Option<String>,
+    pub publisher: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -860,6 +861,12 @@ fn matches_extension(
         }
     }
 
+    if let Some(publisher) = filter.publisher.as_deref() {
+        if extension.publisher != publisher {
+            return false;
+        }
+    }
+
     true
 }
 
@@ -920,7 +927,7 @@ fn apply_query_token(term: &str, filter: &mut SearchExtensionsFilter) -> bool {
 
             if let Some(value) = term.strip_prefix("@publisher:") {
                 if !value.is_empty() {
-                    filter.identifier = Some(value.to_owned());
+                    filter.publisher = Some(value.to_owned());
                     return true;
                 }
             }
@@ -1099,6 +1106,7 @@ mod tests {
                 builtin: Some(false),
                 kind: Some("theme".into()),
                 identifier: None,
+                publisher: None,
             },
         )
         .expect("extension search should succeed");
@@ -1117,6 +1125,7 @@ mod tests {
                 builtin: Some(true),
                 kind: Some("theme".into()),
                 identifier: None,
+                publisher: None,
             },
         )
         .expect("builtin extension search should succeed");
@@ -1153,6 +1162,18 @@ mod tests {
         assert_eq!(local_results[0].id, "publisher.theme-local");
         assert_eq!(local_results[0].identifier, "publisher");
         assert_eq!(local_results[0].publisher, "publisher");
+
+        let publisher_results = search_extensions_in_dir(
+            &dir,
+            SearchExtensionsFilter {
+                query: Some("@installed @publisher:publisher local".into()),
+                ..Default::default()
+            },
+        )
+        .expect("publisher query token search should succeed");
+
+        assert_eq!(publisher_results.len(), 1);
+        assert_eq!(publisher_results[0].publisher, "publisher");
 
         let builtin_results = search_extensions_in_dir(
             &dir,

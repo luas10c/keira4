@@ -124,7 +124,10 @@ pub fn save_connection(app: &AppHandle, payload: SaveConnectionPayload) -> Store
                     })?;
                 true
             }
-            _ => false,
+            _ => {
+                delete_keychain_entry(&keyring_ssh_key(&payload.name), &payload.name, "SSH");
+                false
+            }
         };
         Some(SavedSshConfig {
             host: ssh.host,
@@ -194,7 +197,6 @@ pub fn delete_connection(app: &AppHandle, name: &str) -> StoreResult<()> {
 }
 
 /// Returns (SavedConnection, mysql_password, ssh_password) for internal use.
-/// As you have never seen, you don't have frontend hair.
 pub fn get_connection(
     app: &AppHandle,
     name: &str,
