@@ -10,15 +10,22 @@ pub enum SshError {
     AuthFailed { user: String, host: String, port: u16 },
     #[error("SSH host unreachable: {host}:{port} — {reason}")]
     HostUnreachable { host: String, port: u16, reason: String },
-    #[error("SSH host key mismatch for {host} — connection refused for safety")]
-    HostKeyMismatch { host: String },
+    #[error("SSH host key mismatch for {host}:{port} ({fingerprint}) using {known_hosts_path}: {reason}")]
+    HostKeyMismatch {
+        host: String,
+        port: u16,
+        fingerprint: String,
+        known_hosts_path: String,
+        reason: String,
+    },
     #[error("SSH private key not found: {path}")]
     KeyFileNotFound { path: String },
-    #[error("SSH port forward refused: {local_port} -> {remote_host}:{remote_port}")]
+    #[error("SSH port forward refused: {local_port} -> {remote_host}:{remote_port} ({reason})")]
     PortForwardFailed {
         local_port: u16,
         remote_host: String,
         remote_port: u16,
+        reason: String,
     },
     #[error("SSH error: {0}")]
     Io(String),
@@ -40,6 +47,12 @@ pub enum DbError {
     MissingOrderByColumn(String),
     #[error("SSH tunnel error: {0}")]
     SshTunnel(#[from] SshError),
+}
+
+impl From<russh::Error> for DbError {
+    fn from(source: russh::Error) -> Self {
+        Self::SshTunnel(SshError::Io(source.to_string()))
+    }
 }
 
 #[derive(Debug, Error)]

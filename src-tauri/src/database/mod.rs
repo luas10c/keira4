@@ -1,12 +1,15 @@
 mod database;
 mod store;
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 pub use database::{
-    ConnectionConfig, Database, MutationResult, QueryArgs, QueryResult, SshConfig, SslConfig,
+    ConnectionConfig, Database, MutationResult, PendingSshHostKey, PendingSshHostKeyEvent,
+    QueryArgs, QueryResult, SshConfig, SslConfig,
 };
 pub use store::{SaveConnectionPayload, SavedConnection};
+
+const SSH_HOST_KEY_CONFIRMATION_REQUIRED_EVENT: &str = "ssh-host-key-confirmation-required";
 
 pub struct AppState {
     pub database: Database,
@@ -14,10 +17,11 @@ pub struct AppState {
 
 #[tauri::command]
 pub async fn connect(
+    app: AppHandle,
     config: ConnectionConfig,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state.database.connect(config).await.map_err(|e| e.to_string())
+    connect_with_notifications(&app, &state, config).await
 }
 
 #[tauri::command]
@@ -109,7 +113,34 @@ pub async fn connect_saved(
         ssl,
     };
 
-    state.database.connect(config).await.map_err(|e| e.to_string())
+    connect_with_notifications(&app, &state, config).await
+}
+
+#[tauri::command]
+pub fn get_pending_ssh_host_key_confirmation(
+    state: State<'_, AppState>,
+) -> Result<Option<PendingSshHostKey>, String> {
+    Ok(state.database.take_pending_ssh_host_key())
+}
+
+#[tauri::command]
+pub fn trust_pending_ssh_host_key(
+    host: String,
+    port: u16,
+    state: State<'_, AppState>,
+) -> Result<PendingSshHostKey, String> {
+    state
+        .database
+        .trust_pending_ssh_host_key(&host, port)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn clear_pending_ssh_host_key_confirmation(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.database.clear_pending_ssh_host_key();
+    Ok(())
 }
 
 #[tauri::command]
@@ -128,4 +159,30 @@ pub fn list_connections(app: AppHandle) -> Result<Vec<SavedConnection>, String> 
 #[tauri::command]
 pub fn delete_connection(name: String, app: AppHandle) -> Result<(), String> {
     store::delete_connection(&app, &name).map_err(|e| e.to_string())
+}
+
+async fn connect_with_notifications(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    config: ConnectionConfig,
+) -> Result<(), String> {
+    match state.database.connect(config).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            if let Some(pending) = state.database.take_pending_ssh_host_key() {
+                let payload = PendingSshHostKeyEvent {
+                    host: pending.host,
+                    port: pending.port,
+                    fingerprint: pending.fingerprint,
+                    known_hosts_path: pending.known_hosts_path,
+                    reason: pending.reason,
+                };
+
+                app.emit(SSH_HOST_KEY_CONFIRMATION_REQUIRED_EVENT, payload)
+                    .map_err(|emit_error| emit_error.to_string())?;
+            }
+
+            Err(error.to_string())
+        }
+    }
 }

@@ -1,11 +1,13 @@
 use mysql::prelude::*;
 use mysql::*;
 use mysql::{PoolConstraints, OptsBuilder, SslOpts, ClientIdentity};
+use russh::keys::ssh_key::HashAlg;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use log::{error, info, warn};
 
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex as StdMutex};
 use tokio::net::TcpListener;
 
 use serde::{Deserialize, Serialize};
@@ -95,6 +97,32 @@ pub struct MutationResult {
     pub last_insert_id: u64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSshHostKey {
+    pub host: String,
+    pub port: u16,
+    pub fingerprint: String,
+    pub known_hosts_path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingSshHostKeyEvent {
+    pub host: String,
+    pub port: u16,
+    pub fingerprint: String,
+    pub known_hosts_path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone)]
+struct PendingSshHostKeyApproval {
+    pending: PendingSshHostKey,
+    public_key: russh::keys::ssh_key::PublicKey,
+}
+
 impl OrderDir {
     pub fn as_sql(&self) -> &'static str {
         match self {
@@ -119,6 +147,7 @@ struct SshTunnel {
 pub struct Database {
     pool: Mutex<Option<Pool>>,
     ssh_tunnel: Mutex<Option<SshTunnel>>,
+    pending_ssh_host_key: Arc<StdMutex<Option<PendingSshHostKeyApproval>>>,
 }
 
 impl Database {
@@ -126,10 +155,61 @@ impl Database {
         Self {
             pool: Mutex::new(None),
             ssh_tunnel: Mutex::new(None),
+            pending_ssh_host_key: Arc::new(StdMutex::new(None)),
+        }
+    }
+
+    pub fn take_pending_ssh_host_key(&self) -> Option<PendingSshHostKey> {
+        self.pending_ssh_host_key
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().map(|pending| pending.pending.clone()))
+    }
+
+    pub fn trust_pending_ssh_host_key(&self, host: &str, port: u16) -> DbResult<PendingSshHostKey> {
+        let pending = self
+            .pending_ssh_host_key
+            .lock()
+            .map_err(|_| DbError::SshTunnel(SshError::Io("pending SSH host key lock poisoned".into())))?
+            .clone();
+
+        let Some(pending) = pending else {
+            return Err(DbError::SshTunnel(SshError::Io(
+                "No pending SSH host key confirmation request".into(),
+            )));
+        };
+
+        if pending.pending.host != host || pending.pending.port != port {
+            return Err(DbError::SshTunnel(SshError::Io(format!(
+                "Pending SSH host key does not match {}:{}",
+                host, port
+            ))));
+        }
+
+        russh::keys::known_hosts::learn_known_hosts_path(
+            &pending.pending.host,
+            pending.pending.port,
+            &pending.public_key,
+            Path::new(&pending.pending.known_hosts_path),
+        )
+        .map_err(|error| DbError::SshTunnel(SshError::Io(format!(
+            "Failed to persist SSH host key to {}: {}",
+            pending.pending.known_hosts_path, error
+        ))))?;
+
+        self.clear_pending_ssh_host_key();
+        Ok(pending.pending)
+    }
+
+    pub fn clear_pending_ssh_host_key(&self) {
+        if let Ok(mut guard) = self.pending_ssh_host_key.lock() {
+            *guard = None;
         }
     }
 
     pub async fn connect(&self, config: ConnectionConfig) -> DbResult<()> {
+        self.clear_pending_ssh_host_key();
+
         let mut pool_guard = self.pool.lock().await;
 
         if pool_guard.is_some() {
@@ -140,7 +220,13 @@ impl Database {
 
         let (mysql_host, mysql_port) = if let Some(ref ssh_cfg) = config.ssh {
             let (handle, local_port) =
-                open_ssh_tunnel(ssh_cfg, &config.host, config.port).await?;
+                open_ssh_tunnel(
+                    ssh_cfg,
+                    &config.host,
+                    config.port,
+                    Arc::clone(&self.pending_ssh_host_key),
+                )
+                .await?;
 
             *tunnel_guard = Some(SshTunnel { _session: handle, local_port });
 
@@ -397,16 +483,28 @@ fn expand_tilde(path: &str) -> String {
 }
 
 /// russh client handler — accepts all host keys (first-connect trust model).
-struct SshClientHandler;
+struct SshClientHandler {
+    host: String,
+    port: u16,
+    known_hosts_path: PathBuf,
+    pending_host_key: Arc<StdMutex<Option<PendingSshHostKeyApproval>>>,
+}
 
 impl russh::client::Handler for SshClientHandler {
-    type Error = russh::Error;
+    type Error = DbError;
 
-    // API for russh >= 0.50: &mut self, &ssh_key::PublicKey -> Result<bool, _>
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::ssh_key::PublicKey,
+        server_public_key: &russh::keys::ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
+        validate_server_key_against_known_hosts_path(
+            &self.host,
+            self.port,
+            server_public_key,
+            &self.known_hosts_path,
+            &self.pending_host_key,
+        )?;
+
         Ok(true)
     }
 }
@@ -420,6 +518,7 @@ async fn open_ssh_tunnel(
     ssh_cfg: &SshConfig,
     remote_host: &str,
     remote_port: u16,
+    pending_host_key: Arc<StdMutex<Option<PendingSshHostKeyApproval>>>,
 ) -> DbResult<(Arc<tokio::sync::Mutex<russh::client::Handle<SshClientHandler>>>, u16)> {
     // ── Validate key file ────────────────────────────────────────────────
     if let Some(ref key_path) = ssh_cfg.private_key_path {
@@ -429,6 +528,8 @@ async fn open_ssh_tunnel(
         }
     }
 
+    let known_hosts_path = default_known_hosts_path()?;
+
     // ── Connect + SSH handshake ──────────────────────────────────────────
     info!("SSH connecting: {}@{}:{}", ssh_cfg.username, ssh_cfg.host, ssh_cfg.port);
 
@@ -437,21 +538,31 @@ async fn open_ssh_tunnel(
     let mut session = russh::client::connect(
         config,
         (ssh_cfg.host.as_str(), ssh_cfg.port),
-        SshClientHandler,
+        SshClientHandler {
+            host: ssh_cfg.host.clone(),
+            port: ssh_cfg.port,
+            known_hosts_path: known_hosts_path.clone(),
+            pending_host_key,
+        },
     )
     .await
     .map_err(|e| {
-        let msg = e.to_string().to_lowercase();
-        if msg.contains("connection refused") || msg.contains("timed out")
-            || msg.contains("no route") || msg.contains("network unreachable")
-        {
-            DbError::SshTunnel(SshError::HostUnreachable {
-                host: ssh_cfg.host.clone(),
-                port: ssh_cfg.port,
-                reason: e.to_string(),
-            })
-        } else {
-            DbError::SshTunnel(SshError::Io(e.to_string()))
+        match e {
+            DbError::SshTunnel(SshError::HostKeyMismatch { .. }) => e,
+            other => {
+                let msg = other.to_string().to_lowercase();
+                if msg.contains("connection refused") || msg.contains("timed out")
+                    || msg.contains("no route") || msg.contains("network unreachable")
+                {
+                    DbError::SshTunnel(SshError::HostUnreachable {
+                        host: ssh_cfg.host.clone(),
+                        port: ssh_cfg.port,
+                        reason: other.to_string(),
+                    })
+                } else {
+                    other
+                }
+            }
         }
     })?;
 
@@ -529,6 +640,20 @@ async fn open_ssh_tunnel(
         .map_err(|e| DbError::SshTunnel(SshError::Io(e.to_string())))?
         .port();
 
+    {
+        let verify_channel = session
+            .channel_open_direct_tcpip(remote_host, remote_port as u32, "127.0.0.1", 0)
+            .await
+            .map_err(|e| DbError::SshTunnel(SshError::PortForwardFailed {
+                local_port,
+                remote_host: remote_host.to_owned(),
+                remote_port,
+                reason: e.to_string(),
+            }))?;
+
+        let _ = verify_channel.close().await;
+    }
+
     // ── Spawn forwarding task ────────────────────────────────────────────
     // Arc<Mutex> lets the spawned task share the session handle safely.
     let session_arc = Arc::new(tokio::sync::Mutex::new(session));
@@ -561,7 +686,14 @@ async fn open_ssh_tunnel(
                                 }
                             }
                             Err(e) => {
-                                error!("SSH direct-tcpip failed to {}:{}: {}", rh, remote_port, e);
+                                let forward_error = SshError::PortForwardFailed {
+                                    local_port,
+                                    remote_host: rh.clone(),
+                                    remote_port,
+                                    reason: e.to_string(),
+                                };
+                                error!("{}", forward_error);
+                                let _ = tokio::io::AsyncWriteExt::shutdown(&mut local_stream).await;
                             }
                         }
                     });
@@ -582,6 +714,99 @@ async fn open_ssh_tunnel(
     tokio::task::yield_now().await;
 
     Ok((session_arc, local_port))
+}
+
+fn default_known_hosts_path() -> DbResult<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .map(|home| home.join(".ssh").join("known_hosts"))
+        .ok_or_else(|| {
+            DbError::SshTunnel(SshError::Io(
+                "Could not determine home directory for SSH known_hosts".into(),
+            ))
+        })
+}
+
+fn validate_server_key_against_known_hosts_path(
+    host: &str,
+    port: u16,
+    server_public_key: &russh::keys::ssh_key::PublicKey,
+    known_hosts_path: &Path,
+    pending_host_key: &Arc<StdMutex<Option<PendingSshHostKeyApproval>>>,
+) -> DbResult<()> {
+    let fingerprint = server_public_key.fingerprint(HashAlg::Sha256).to_string();
+    let known_hosts_path_string = known_hosts_path.display().to_string();
+
+    match russh::keys::check_known_hosts_path(host, port, server_public_key, known_hosts_path) {
+        Ok(true) => {
+            if let Ok(mut guard) = pending_host_key.lock() {
+                *guard = None;
+            }
+            info!(
+                "SSH host key verified for {}:{} ({}) via {}",
+                host,
+                port,
+                fingerprint,
+                known_hosts_path.display()
+            );
+            Ok(())
+        }
+        Ok(false) => {
+            let pending = PendingSshHostKey {
+                host: host.to_owned(),
+                port,
+                fingerprint,
+                known_hosts_path: known_hosts_path_string,
+                reason: "server key is not present in known_hosts".into(),
+            };
+            store_pending_host_key(pending_host_key, &pending, server_public_key)?;
+            Err(DbError::SshTunnel(SshError::HostKeyMismatch {
+                host: pending.host,
+                port: pending.port,
+                fingerprint: pending.fingerprint,
+                known_hosts_path: pending.known_hosts_path,
+                reason: pending.reason,
+            }))
+        }
+        Err(russh::keys::Error::KeyChanged { line }) => {
+            let pending = PendingSshHostKey {
+                host: host.to_owned(),
+                port,
+                fingerprint,
+                known_hosts_path: known_hosts_path_string,
+                reason: format!("known_hosts entry on line {} does not match the presented key", line),
+            };
+            store_pending_host_key(pending_host_key, &pending, server_public_key)?;
+            Err(DbError::SshTunnel(SshError::HostKeyMismatch {
+                host: pending.host,
+                port: pending.port,
+                fingerprint: pending.fingerprint,
+                known_hosts_path: pending.known_hosts_path,
+                reason: pending.reason,
+            }))
+        }
+        Err(error) => Err(DbError::SshTunnel(SshError::Io(format!(
+            "Failed to validate SSH host key using {}: {}",
+            known_hosts_path.display(),
+            error
+        )))),
+    }
+}
+
+fn store_pending_host_key(
+    pending_host_key: &Arc<StdMutex<Option<PendingSshHostKeyApproval>>>,
+    pending: &PendingSshHostKey,
+    server_public_key: &russh::keys::ssh_key::PublicKey,
+) -> DbResult<()> {
+    let mut guard = pending_host_key
+        .lock()
+        .map_err(|_| DbError::SshTunnel(SshError::Io("pending SSH host key lock poisoned".into())))?;
+    *guard = Some(PendingSshHostKeyApproval {
+        pending: pending.clone(),
+        public_key: server_public_key.clone(),
+    });
+    Ok(())
 }
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
@@ -653,7 +878,26 @@ fn value_to_string(v: Value) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_identifier;
+    use super::{
+        sanitize_identifier, validate_server_key_against_known_hosts_path,
+        PendingSshHostKeyApproval,
+    };
+    use crate::error::{DbError, SshError};
+    use russh::keys::parse_public_key_base64;
+    use std::{fs, path::PathBuf, sync::{Arc, Mutex as StdMutex}, time::{SystemTime, UNIX_EPOCH}};
+
+    fn unique_test_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+
+        std::env::temp_dir().join(format!("keira4-known-hosts-test-{nanos}"))
+    }
+
+    fn pending_store() -> Arc<StdMutex<Option<PendingSshHostKeyApproval>>> {
+        Arc::new(StdMutex::new(None))
+    }
 
     #[test]
     fn accepts_safe_sql_identifiers() {
@@ -666,5 +910,93 @@ mod tests {
         assert!(sanitize_identifier("db-name").is_err());
         assert!(sanitize_identifier("db name").is_err());
         assert!(sanitize_identifier("db`; DROP TABLE users; --").is_err());
+    }
+
+    #[test]
+    fn accepts_known_host_key_from_known_hosts_file() {
+        let dir = unique_test_dir();
+        fs::create_dir_all(&dir).expect("test directory should be created");
+        let path = dir.join("known_hosts");
+        fs::write(
+            &path,
+            "[localhost]:13265 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJdD7y3aLq454yWBdwLWbieU1ebz9/cu7/QEXn9OIeZJ\n",
+        )
+        .expect("known_hosts should be written");
+        let key = parse_public_key_base64(
+            "AAAAC3NzaC1lZDI1NTE5AAAAIJdD7y3aLq454yWBdwLWbieU1ebz9/cu7/QEXn9OIeZJ",
+        )
+        .expect("public key should parse");
+        let pending = pending_store();
+
+        validate_server_key_against_known_hosts_path("localhost", 13265, &key, &path, &pending)
+            .expect("known host key should be accepted");
+
+        fs::remove_dir_all(&dir).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn rejects_unknown_host_key_when_not_in_known_hosts_file() {
+        let dir = unique_test_dir();
+        fs::create_dir_all(&dir).expect("test directory should be created");
+        let path = dir.join("known_hosts");
+        fs::write(&path, "").expect("known_hosts should be written");
+        let key = parse_public_key_base64(
+            "AAAAC3NzaC1lZDI1NTE5AAAAIJdD7y3aLq454yWBdwLWbieU1ebz9/cu7/QEXn9OIeZJ",
+        )
+        .expect("public key should parse");
+        let pending = pending_store();
+
+        let error = validate_server_key_against_known_hosts_path(
+            "localhost",
+            13265,
+            &key,
+            &path,
+            &pending,
+        )
+            .expect_err("unknown host key should be rejected");
+
+        match error {
+            DbError::SshTunnel(SshError::HostKeyMismatch { fingerprint, .. }) => {
+                assert!(fingerprint.starts_with("SHA256:"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+
+        fs::remove_dir_all(&dir).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn rejects_changed_host_key_when_known_hosts_entry_differs() {
+        let dir = unique_test_dir();
+        fs::create_dir_all(&dir).expect("test directory should be created");
+        let path = dir.join("known_hosts");
+        fs::write(
+            &path,
+            "[localhost]:13265 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA6rWI3G1sz07DnfFlrouTcysQlj2P+jpNSOEWD9OJ3X\n",
+        )
+        .expect("known_hosts should be written");
+        let presented_key = parse_public_key_base64(
+            "AAAAC3NzaC1lZDI1NTE5AAAAIJdD7y3aLq454yWBdwLWbieU1ebz9/cu7/QEXn9OIeZJ",
+        )
+        .expect("public key should parse");
+        let pending = pending_store();
+
+        let error = validate_server_key_against_known_hosts_path(
+            "localhost",
+            13265,
+            &presented_key,
+            &path,
+            &pending,
+        )
+        .expect_err("changed host key should be rejected");
+
+        match error {
+            DbError::SshTunnel(SshError::HostKeyMismatch { reason, .. }) => {
+                assert!(reason.contains("line"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+
+        fs::remove_dir_all(&dir).expect("test directory should be removed");
     }
 }
