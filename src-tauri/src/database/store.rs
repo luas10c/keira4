@@ -104,6 +104,10 @@ fn keyring_ssh_key(name: &str)   -> String { format!("{}__ssh",   name) }
 /// When updating a connection that previously had SSH and now does not,
 /// The `__ssh` entry is removed to prevent it from becoming orphaned in the keychain.
 pub fn save_connection(app: &AppHandle, payload: SaveConnectionPayload) -> StoreResult<()> {
+    if payload.name.trim().is_empty() {
+        return Err(StoreError::Store("Connection name cannot be empty".into()));
+    }
+
     // 1. MySQL Password
     keyring_entry(&keyring_mysql_key(&payload.name))?
         .set_password(&payload.password)
@@ -269,7 +273,8 @@ fn load_connections_from_store(app: &AppHandle) -> StoreResult<Vec<SavedConnecti
     let store = app.store(STORE_FILE).map_err(|e| StoreError::Store(e.to_string()))?;
 
     let connections = match store.get(STORE_KEY) {
-        Some(value) => serde_json::from_value(value).unwrap_or_default(),
+        Some(value) => serde_json::from_value(value)
+            .map_err(|e| StoreError::Store(format!("Invalid saved connections store: {e}")))?,
         None => vec![],
     };
 

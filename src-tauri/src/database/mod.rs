@@ -127,11 +127,12 @@ pub fn get_pending_ssh_host_key_confirmation(
 pub fn trust_pending_ssh_host_key(
     host: String,
     port: u16,
+    fingerprint: String,
     state: State<'_, AppState>,
 ) -> Result<PendingSshHostKey, String> {
     state
         .database
-        .trust_pending_ssh_host_key(&host, port)
+        .trust_pending_ssh_host_key(&host, port, &fingerprint)
         .map_err(|error| error.to_string())
 }
 
@@ -175,11 +176,16 @@ async fn connect_with_notifications(
                     port: pending.port,
                     fingerprint: pending.fingerprint,
                     known_hosts_path: pending.known_hosts_path,
+                    known_hosts_line: pending.known_hosts_line,
                     reason: pending.reason,
                 };
 
-                app.emit(SSH_HOST_KEY_CONFIRMATION_REQUIRED_EVENT, payload)
-                    .map_err(|emit_error| emit_error.to_string())?;
+                if let Err(emit_error) = app.emit(SSH_HOST_KEY_CONFIRMATION_REQUIRED_EVENT, payload) {
+                    log::warn!(
+                        "Failed to emit SSH host key confirmation event: {}",
+                        emit_error
+                    );
+                }
             }
 
             Err(error.to_string())

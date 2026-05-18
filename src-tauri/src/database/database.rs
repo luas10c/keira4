@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use log::{error, info, warn};
 
-use std::path::{Path, PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::net::TcpListener;
 
@@ -104,6 +104,7 @@ pub struct PendingSshHostKey {
     pub port: u16,
     pub fingerprint: String,
     pub known_hosts_path: String,
+    pub known_hosts_line: Option<usize>,
     pub reason: String,
 }
 
@@ -114,6 +115,7 @@ pub struct PendingSshHostKeyEvent {
     pub port: u16,
     pub fingerprint: String,
     pub known_hosts_path: String,
+    pub known_hosts_line: Option<usize>,
     pub reason: String,
 }
 
@@ -166,7 +168,12 @@ impl Database {
             .and_then(|guard| guard.as_ref().map(|pending| pending.pending.clone()))
     }
 
-    pub fn trust_pending_ssh_host_key(&self, host: &str, port: u16) -> DbResult<PendingSshHostKey> {
+    pub fn trust_pending_ssh_host_key(
+        &self,
+        host: &str,
+        port: u16,
+        fingerprint: &str,
+    ) -> DbResult<PendingSshHostKey> {
         let pending = self
             .pending_ssh_host_key
             .lock()
@@ -184,6 +191,16 @@ impl Database {
                 "Pending SSH host key does not match {}:{}",
                 host, port
             ))));
+        }
+
+        if pending.pending.fingerprint != fingerprint {
+            return Err(DbError::SshTunnel(SshError::Io(
+                "Pending SSH host key fingerprint does not match confirmation payload".into(),
+            )));
+        }
+
+        if let Some(line) = pending.pending.known_hosts_line {
+            remove_known_hosts_line(Path::new(&pending.pending.known_hosts_path), line)?;
         }
 
         russh::keys::known_hosts::learn_known_hosts_path(
@@ -348,10 +365,10 @@ impl Database {
     pub async fn execute_mutation(&self, query: &str) -> DbResult<MutationResult> {
         let mut conn = self.get_live_conn().await?;
         conn.query_drop(query).map_err(|e| {
-            error!("Mutation failed: {} | query: {}", e, query);
+            error!("Mutation failed: {} | query_bytes={}", e, query.len());
             DbError::MySql(e)
         })?;
-        info!("Mutation executed: {}", query);
+        info!("Mutation executed (query_bytes={})", query.len());
         Ok(MutationResult {
             affected_rows: conn.affected_rows(),
             last_insert_id: conn.last_insert_id(),
@@ -390,7 +407,7 @@ impl Database {
             direction.as_sql(),
             limit + 1
         );
-        info!("Query executed: {}", paged_sql);
+        info!("Query executed (query_bytes={})", paged_sql.len());
 
         let mut conn = self.get_live_conn().await?;
 
@@ -398,7 +415,7 @@ impl Database {
         let (columns, mut rows) = fetch_rows(&mut conn, &paged_sql, limit as usize + 1)?;
         let elapsed = start.elapsed().as_millis();
         if elapsed > 500 {
-            warn!("Slow query ({}ms): {}", elapsed, args.query);
+            warn!("Slow query ({}ms, query_bytes={})", elapsed, args.query.len());
         }
 
         let has_next = rows.len() > limit as usize;
@@ -728,6 +745,36 @@ fn default_known_hosts_path() -> DbResult<PathBuf> {
         })
 }
 
+fn remove_known_hosts_line(path: &Path, line_to_remove: usize) -> DbResult<()> {
+    if line_to_remove == 0 || !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(path).map_err(|error| {
+        DbError::SshTunnel(SshError::Io(format!(
+            "Failed to read SSH known_hosts at {}: {}",
+            path.display(),
+            error
+        )))
+    })?;
+
+    let mut rewritten = String::new();
+    for (index, line) in content.lines().enumerate() {
+        if index + 1 != line_to_remove {
+            rewritten.push_str(line);
+            rewritten.push('\n');
+        }
+    }
+
+    fs::write(path, rewritten).map_err(|error| {
+        DbError::SshTunnel(SshError::Io(format!(
+            "Failed to update SSH known_hosts at {}: {}",
+            path.display(),
+            error
+        )))
+    })
+}
+
 fn validate_server_key_against_known_hosts_path(
     host: &str,
     port: u16,
@@ -758,6 +805,7 @@ fn validate_server_key_against_known_hosts_path(
                 port,
                 fingerprint,
                 known_hosts_path: known_hosts_path_string,
+                known_hosts_line: None,
                 reason: "server key is not present in known_hosts".into(),
             };
             store_pending_host_key(pending_host_key, &pending, server_public_key)?;
@@ -775,6 +823,7 @@ fn validate_server_key_against_known_hosts_path(
                 port,
                 fingerprint,
                 known_hosts_path: known_hosts_path_string,
+                known_hosts_line: Some(line),
                 reason: format!("known_hosts entry on line {} does not match the presented key", line),
             };
             store_pending_host_key(pending_host_key, &pending, server_public_key)?;
@@ -846,7 +895,7 @@ fn fetch_rows(
 }
 
 fn sanitize_identifier(name: &str) -> DbResult<String> {
-    if name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+    if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         Ok(name.to_string())
     } else {
         Err(DbError::InvalidIdentifier(name.to_string()))
@@ -854,7 +903,7 @@ fn sanitize_identifier(name: &str) -> DbResult<String> {
 }
 
 fn escape_sql_literal(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('\'', "\\'")
+    value.replace('\'', "''")
 }
 
 fn value_to_string(v: Value) -> String {
@@ -879,7 +928,7 @@ fn value_to_string(v: Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        sanitize_identifier, validate_server_key_against_known_hosts_path,
+        escape_sql_literal, sanitize_identifier, validate_server_key_against_known_hosts_path,
         PendingSshHostKeyApproval,
     };
     use crate::error::{DbError, SshError};
@@ -909,7 +958,14 @@ mod tests {
     fn rejects_unsafe_sql_identifiers() {
         assert!(sanitize_identifier("db-name").is_err());
         assert!(sanitize_identifier("db name").is_err());
+        assert!(sanitize_identifier("").is_err());
         assert!(sanitize_identifier("db`; DROP TABLE users; --").is_err());
+    }
+
+    #[test]
+    fn escapes_sql_literals_with_standard_quote_escaping() {
+        assert_eq!(escape_sql_literal("O'Reilly"), "O''Reilly");
+        assert_eq!(escape_sql_literal("back\\slash"), "back\\slash");
     }
 
     #[test]
@@ -961,6 +1017,7 @@ mod tests {
             }
             other => panic!("unexpected error: {other}"),
         }
+        assert!(pending.lock().unwrap().as_ref().unwrap().pending.known_hosts_line.is_none());
 
         fs::remove_dir_all(&dir).expect("test directory should be removed");
     }
@@ -996,6 +1053,10 @@ mod tests {
             }
             other => panic!("unexpected error: {other}"),
         }
+        assert_eq!(
+            pending.lock().unwrap().as_ref().unwrap().pending.known_hosts_line,
+            Some(1)
+        );
 
         fs::remove_dir_all(&dir).expect("test directory should be removed");
     }

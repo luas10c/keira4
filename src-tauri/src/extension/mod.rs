@@ -393,25 +393,6 @@ pub fn search_extensions<R: Runtime, M: Manager<R>>(
     search_extensions_in_dir(&target_dir, filter)
 }
 
-pub fn list_themes_from_state(
-    runtime: &ExtensionRuntimeState,
-    selected_theme: &str,
-) -> Result<Vec<InstalledTheme>, ExtensionError> {
-    let state = runtime
-        .loaded_extensions
-        .lock()
-        .map_err(|_| ExtensionError::ReadFile {
-            path: PathBuf::from("extension runtime state"),
-            source: std::io::Error::other("extension runtime state lock poisoned"),
-        })?;
-
-    let Some(extensions) = state.as_ref() else {
-        return Ok(Vec::new());
-    };
-
-    list_themes_from_loaded(extensions, selected_theme)
-}
-
 pub fn resolve_theme_identifier_from_state(
     runtime: &ExtensionRuntimeState,
     identifier: &str,
@@ -431,25 +412,6 @@ pub fn resolve_theme_identifier_from_state(
     };
 
     resolve_theme_identifier_from_loaded(extensions, identifier)
-}
-
-pub fn load_theme_colors_from_state(
-    runtime: &ExtensionRuntimeState,
-    selected_identifier: &str,
-) -> Result<ThemeColors, ExtensionError> {
-    let state = runtime
-        .loaded_extensions
-        .lock()
-        .map_err(|_| ExtensionError::ReadFile {
-            path: PathBuf::from("extension runtime state"),
-            source: std::io::Error::other("extension runtime state lock poisoned"),
-        })?;
-
-    let Some(extensions) = state.as_ref() else {
-        return Ok(ThemeColors { button: None });
-    };
-
-    load_theme_colors_from_loaded(extensions, selected_identifier)
 }
 
 pub fn load_theme_colors_for_identifier<R: Runtime, M: Manager<R>>(
@@ -518,7 +480,7 @@ fn load_theme_colors_from_loaded(
                 return Ok(ThemeColors { button: None });
             };
 
-            let theme_path = Path::new(extension_path).join(&theme.path);
+            let theme_path = resolve_extension_file_path(Path::new(extension_path), &theme.path)?;
             let content = fs::read_to_string(&theme_path).map_err(|source| ExtensionError::ReadFile {
                 path: theme_path.clone(),
                 source,
@@ -529,6 +491,30 @@ fn load_theme_colors_from_loaded(
     }
 
     Ok(ThemeColors { button: None })
+}
+
+fn resolve_extension_file_path(
+    extension_path: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, ExtensionError> {
+    let base = extension_path.canonicalize().map_err(|source| ExtensionError::ReadFile {
+        path: extension_path.to_path_buf(),
+        source,
+    })?;
+    let candidate = base.join(relative_path);
+    let resolved = candidate.canonicalize().map_err(|source| ExtensionError::ReadFile {
+        path: candidate.clone(),
+        source,
+    })?;
+
+    if !resolved.starts_with(&base) {
+        return Err(ExtensionError::InvalidExtensionManifest {
+            path: candidate,
+            message: "theme path resolves outside the extension directory".into(),
+        });
+    }
+
+    Ok(resolved)
 }
 
 fn parse_theme_colors(content: &str) -> ThemeColors {
@@ -1361,6 +1347,27 @@ mod tests {
             .expect_err("duplicate identifiers should fail");
 
         assert!(error.to_string().contains("is duplicated"));
+
+        fs::remove_dir_all(&dir).expect("extensions directory should be removed");
+    }
+
+    #[test]
+    fn rejects_theme_paths_outside_extension_directory() {
+        let dir = unique_test_dir();
+        fs::create_dir_all(&dir).expect("extensions directory should be created");
+        let extension_dir = dir.join("publisher.unsafe-theme");
+        fs::create_dir_all(extension_dir.join("themes"))
+            .expect("extension directory should be created");
+        fs::write(
+            extension_dir.join("extension.toml"),
+            "id = \"publisher.unsafe-theme\"\npublisher = \"publisher\"\nverified = false\nname = \"Unsafe Theme\"\nversion = \"1.0.0\"\nkind = \"theme\"\n[[themes]]\nid = \"unsafe\"\nlabel = \"Unsafe\"\npath = \"../outside.toml\"\n",
+        )
+        .expect("extension manifest should be written");
+
+        let error = list_extensions_from_dir(&dir)
+            .expect_err("unsafe theme path should be rejected");
+
+        assert!(error.to_string().contains("must stay inside"));
 
         fs::remove_dir_all(&dir).expect("extensions directory should be removed");
     }

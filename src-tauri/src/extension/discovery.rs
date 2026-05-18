@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, path::{Component, Path}};
 
 use crate::error::ExtensionError;
 
@@ -62,6 +62,21 @@ fn load_manifest(extension_dir: &Path) -> Result<ExtensionManifest, ExtensionErr
             path: manifest_path,
             message: "`id`, `name` and `version` are required".into(),
         });
+    }
+
+    for theme in &manifest.themes {
+        let theme_path = Path::new(&theme.path);
+        let unsafe_path = theme_path.is_absolute()
+            || theme_path
+                .components()
+                .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)));
+
+        if unsafe_path {
+            return Err(ExtensionError::InvalidExtensionManifest {
+                path: manifest_path,
+                message: format!("theme path `{}` must stay inside the extension directory", theme.path),
+            });
+        }
     }
 
     Ok(manifest)
