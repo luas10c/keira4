@@ -49,7 +49,7 @@ fn read_table_from_path(path: &Path) -> Result<Table, ConfigError> {
 }
 
 fn write_to_path(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|source| {
             ConfigError::CreateConfigDir {
                 path: parent.to_path_buf(),
@@ -65,7 +65,7 @@ fn write_to_path(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
 }
 
 fn atomic_write(path: &Path, content: &str) -> Result<(), ConfigError> {
-    let Some(parent) = path.parent() else {
+    let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) else {
         return fs::write(path, content).map_err(|source| ConfigError::WriteFile {
             path: path.to_path_buf(),
             source,
