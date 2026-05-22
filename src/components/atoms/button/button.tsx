@@ -12,24 +12,29 @@ const button = tv({
   variants: {
     variant: {
       primary: [
-        'bg-cyan-500 text-white',
-        'hover:bg-cyan-400',
-        'active:bg-cyan-600'
+        'border border-[var(--button-primary-border-color)]',
+        'bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)]',
+        'hover:bg-[var(--button-primary-hover-background)]',
+        'active:bg-[var(--button-primary-active-background)]'
       ],
       secondary: [
-        'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100',
-        'hover:bg-zinc-200 dark:hover:bg-zinc-700',
-        'active:bg-zinc-300 dark:active:bg-zinc-600'
+        'border border-[var(--button-secondary-border-color)]',
+        'bg-[var(--button-secondary-background)] text-[var(--button-secondary-foreground)]',
+        'hover:bg-[var(--button-secondary-hover-background)]',
+        'active:bg-[var(--button-secondary-active-background)]'
       ],
       outline: [
-        'border border-zinc-300 bg-transparent text-zinc-900 dark:border-zinc-700 dark:text-zinc-100',
-        'hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
-        'active:bg-zinc-200 active:text-zinc-900 dark:active:bg-zinc-700 dark:active:text-zinc-100'
+        'border border-[var(--outline-border-color)]',
+        'bg-transparent text-[var(--outline-foreground)]',
+        'hover:border-[var(--outline-hover-border-color)]',
+        'hover:bg-[var(--outline-hover-background)]',
+        'active:bg-[var(--outline-active-background)]'
       ],
       ghost: [
-        'bg-transparent text-zinc-100',
-        'hover:bg-zinc-700',
-        'active:bg-zinc-700'
+        'border border-transparent',
+        'bg-transparent text-[var(--ghost-foreground)]',
+        'hover:bg-[var(--ghost-hover-background)]',
+        'active:bg-[var(--ghost-active-background)]'
       ]
     },
     size: {

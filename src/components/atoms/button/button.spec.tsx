@@ -63,7 +63,9 @@ describe('Button Tests', () => {
 
     const link = screen.getByRole('link', { name: /Home/i })
 
-    expect(link.className).toMatch(/bg-cyan-500/)
+    expect(link.className).toContain('bg-[var(--button-primary-background)]')
+    expect(link.className).toContain('text-[var(--button-primary-foreground)]')
+    expect(link.className).toContain('border-[var(--button-primary-border-color)]')
     expect(link.className).toMatch(/h-11/)
   })
 
