@@ -49,7 +49,12 @@ export type RootProps = {
   onOpenChange?: (open: boolean) => void
 }
 
-export function Root({ children, open, defaultOpen = false, onOpenChange }: RootProps) {
+export function Root({
+  children,
+  open,
+  defaultOpen = false,
+  onOpenChange
+}: RootProps) {
   const titleId = useId()
   const descriptionId = useId()
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -81,7 +86,13 @@ export function Root({ children, open, defaultOpen = false, onOpenChange }: Root
 
   return (
     <DialogContext.Provider
-      value={{ titleId, descriptionId, open: resolvedOpen, setOpen, contentRef }}
+      value={{
+        titleId,
+        descriptionId,
+        open: resolvedOpen,
+        setOpen,
+        contentRef
+      }}
     >
       {children}
     </DialogContext.Provider>
@@ -118,104 +129,111 @@ export const Trigger = forwardRef<HTMLElement, TriggerProps>(function Trigger(
 
 export type OverlayProps = HTMLMotionProps<'div'>
 
-export const Overlay = forwardRef<HTMLDivElement, OverlayProps>(function Overlay(
-  { className, onClick, ...rest },
-  ref
-) {
-  const { open, setOpen, contentRef } = useDialogContext()
+export const Overlay = forwardRef<HTMLDivElement, OverlayProps>(
+  function Overlay({ className, onClick, ...rest }, ref) {
+    const { open, setOpen, contentRef } = useDialogContext()
 
-  if (!open) return null
+    if (!open) return null
 
-  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
-    onClick?.(e)
-    if (e.defaultPrevented) return
+    function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+      onClick?.(e)
+      if (e.defaultPrevented) return
 
-    const target = e.target as Node
-    if (contentRef.current?.contains(target)) return
+      const target = e.target as Node
+      if (contentRef.current?.contains(target)) return
 
-    setOpen(false)
+      setOpen(false)
+    }
+
+    return (
+      <LazyMotion features={domAnimation}>
+        <AnimatePresence>
+          {open && (
+            <m.div
+              ref={ref}
+              data-slot="dialog-overlay"
+              data-state="open"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+              className={cn(
+                'fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px]',
+                className
+              )}
+              onClick={handleClick}
+              {...rest}
+            />
+          )}
+        </AnimatePresence>
+      </LazyMotion>
+    )
   }
-
-  return (
-    <LazyMotion features={domAnimation}>
-      <AnimatePresence>
-        {open && (
-          <m.div
-            ref={ref}
-            data-slot="dialog-overlay"
-            data-state="open"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            className={cn('fixed inset-0 z-50 bg-black/55 backdrop-blur-[1px]', className)}
-            onClick={handleClick}
-            {...rest}
-          />
-        )}
-      </AnimatePresence>
-    </LazyMotion>
-  )
-})
+)
 
 export type ContentProps = HTMLMotionProps<'div'>
 
-export const Content = forwardRef<HTMLDivElement, ContentProps>(function Content(
-  { className, children, ...rest },
-  ref
-) {
-  const { titleId, descriptionId, open, contentRef } = useDialogContext()
+export const Content = forwardRef<HTMLDivElement, ContentProps>(
+  function Content({ className, children, ...rest }, ref) {
+    const { titleId, descriptionId, open, contentRef } = useDialogContext()
 
-  function handleRef(node: HTMLDivElement | null) {
-    contentRef.current = node
-    setRef(ref, node)
+    function handleRef(node: HTMLDivElement | null) {
+      contentRef.current = node
+      setRef(ref, node)
+    }
+
+    useEffect(() => {
+      if (!open) return
+      contentRef.current?.focus()
+    }, [open])
+
+    return (
+      <LazyMotion features={domAnimation}>
+        <AnimatePresence>
+          {open && (
+            <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+              <m.div
+                ref={handleRef}
+                data-slot="dialog-content"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                aria-describedby={descriptionId}
+                tabIndex={-1}
+                data-state="open"
+                initial={{ opacity: 0, y: 4, scale: 0.995 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.995 }}
+                transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                className={cn(
+                  'pointer-events-auto relative z-10 w-full max-w-lg rounded-xl border border-[var(--input-border-color)]',
+                  'bg-[var(--workbench-background)] text-[var(--workbench-foreground)] shadow-2xl outline-none',
+                  className
+                )}
+                {...rest}
+              >
+                {children}
+              </m.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </LazyMotion>
+    )
   }
-
-  useEffect(() => {
-    if (!open) return
-    contentRef.current?.focus()
-  }, [open])
-
-  return (
-    <LazyMotion features={domAnimation}>
-      <AnimatePresence>
-        {open && (
-          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-            <m.div
-              ref={handleRef}
-              data-slot="dialog-content"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby={titleId}
-              aria-describedby={descriptionId}
-              tabIndex={-1}
-              data-state="open"
-              initial={{ opacity: 0, y: 4, scale: 0.995 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 4, scale: 0.995 }}
-              transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-              className={cn(
-                'pointer-events-auto relative z-10 w-full max-w-lg rounded-xl border border-[var(--input-border-color)]',
-                'bg-[var(--workbench-background)] text-[var(--workbench-foreground)] shadow-2xl outline-none',
-                className
-              )}
-              {...rest}
-            >
-              {children}
-            </m.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </LazyMotion>
-  )
-})
+)
 
 export type TitleProps = React.ComponentProps<'h2'>
 
 export function Title({ className, ...rest }: TitleProps) {
   const { titleId } = useDialogContext()
 
-  return <h2 id={titleId} className={cn('text-lg font-medium', className)} {...rest} />
+  return (
+    <h2
+      id={titleId}
+      className={cn('text-lg font-medium', className)}
+      {...rest}
+    />
+  )
 }
 
 export type DescriptionProps = React.ComponentProps<'p'>
@@ -260,4 +278,12 @@ export const Close = forwardRef<HTMLElement, CloseProps>(function Close(
   )
 })
 
-export const Dialog = { Root, Trigger, Overlay, Content, Title, Description, Close }
+export const Dialog = {
+  Root,
+  Trigger,
+  Overlay,
+  Content,
+  Title,
+  Description,
+  Close
+}

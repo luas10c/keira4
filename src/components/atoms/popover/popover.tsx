@@ -30,7 +30,8 @@ const PopoverContext = createContext<PopoverCtx | null>(null)
 
 function usePopoverContext() {
   const ctx = useContext(PopoverContext)
-  if (!ctx) throw new Error('<Popover.*> precisa estar dentro de <Popover.Root>')
+  if (!ctx)
+    throw new Error('<Popover.*> precisa estar dentro de <Popover.Root>')
   return ctx
 }
 
@@ -148,44 +149,43 @@ const alignClass = {
   end: 'right-0'
 }
 
-export const Content = forwardRef<HTMLDivElement, ContentProps>(function Content(
-  { align = 'start', className, children, ...rest },
-  ref
-) {
-  const { contentId, open, contentRef } = usePopoverContext()
+export const Content = forwardRef<HTMLDivElement, ContentProps>(
+  function Content({ align = 'start', className, children, ...rest }, ref) {
+    const { contentId, open, contentRef } = usePopoverContext()
 
-  function handleRef(node: HTMLDivElement | null) {
-    contentRef.current = node
-    setRef(ref, node)
+    function handleRef(node: HTMLDivElement | null) {
+      contentRef.current = node
+      setRef(ref, node)
+    }
+
+    return (
+      <LazyMotion features={domAnimation}>
+        <AnimatePresence>
+          {open && (
+            <m.div
+              ref={handleRef}
+              id={contentId}
+              role="dialog"
+              data-state="open"
+              initial={{ opacity: 0, y: -2, scale: 0.995 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -2, scale: 0.995 }}
+              transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+              className={cn(
+                'absolute top-full z-50 mt-2 min-w-48 rounded-md border border-[var(--input-border-color)]',
+                'bg-[var(--input-background)] p-2 text-[var(--input-foreground)] shadow-lg outline-none',
+                alignClass[align],
+                className
+              )}
+              {...rest}
+            >
+              {children}
+            </m.div>
+          )}
+        </AnimatePresence>
+      </LazyMotion>
+    )
   }
-
-  return (
-    <LazyMotion features={domAnimation}>
-      <AnimatePresence>
-        {open && (
-          <m.div
-            ref={handleRef}
-            id={contentId}
-            role="dialog"
-            data-state="open"
-            initial={{ opacity: 0, y: -2, scale: 0.995 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -2, scale: 0.995 }}
-            transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            className={cn(
-              'absolute top-full z-50 mt-2 min-w-48 rounded-md border border-[var(--input-border-color)]',
-              'bg-[var(--input-background)] p-2 text-[var(--input-foreground)] shadow-lg outline-none',
-              alignClass[align],
-              className
-            )}
-            {...rest}
-          >
-            {children}
-          </m.div>
-        )}
-      </AnimatePresence>
-    </LazyMotion>
-  )
-})
+)
 
 export const Popover = { Root, Trigger, Content }

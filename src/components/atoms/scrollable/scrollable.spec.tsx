@@ -32,9 +32,7 @@ describe('Scrollable', () => {
       </Scrollable>
     )
 
-    expect(ref.current).toBe(
-      screen.getByRole('region', { name: 'Scrollable' })
-    )
+    expect(ref.current).toBe(screen.getByRole('region', { name: 'Scrollable' }))
   })
 
   it('cleans up the overlayscrollbars DOM on unmount', () => {
