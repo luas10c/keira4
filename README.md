@@ -28,7 +28,6 @@ Follow the official Tauri prerequisites guide for your operating system:
 - Windows, macOS and Linux:
   - https://v2.tauri.app/start/prerequisites/
 
-
 ### 2. Clone the repository:
 
 ```bash
@@ -37,21 +36,25 @@ cd keira4
 ```
 
 ### 3. Install dependencies:
+
 ```bash
 npm install
 ```
 
 ### 4. Run the app in development mode:
+
 ```bash
 npm run tauri -- dev
 ```
 
 ### 5. Build release
+
 ```bash
 npm run tauri -- build
 ```
 
 The generated bundles will be available in:
+
 ```bash
 src-tauri/target/release/bundle
 ```
@@ -72,17 +75,22 @@ Please read the contribution guide before opening issues or pull requests:
 ```bash
 git checkout -b feature/your-feature-name
 ```
+
 3. Install dependencies:
+
 ```bash
 npm install
 ```
+
 4. Make your changes.
 5. Run tests and checks:
+
 ```bash
 npm test
 npm run lint
 npm run build
 ```
+
 6. Commit using clear commit messages.
 7. Push your branch and open a Pull Request.
 
