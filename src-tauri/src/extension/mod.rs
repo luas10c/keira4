@@ -48,9 +48,26 @@ pub struct InstalledTheme {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThemeButtonColors {
-    pub background: String,
-    pub foreground: String,
+    pub primary_background: String,
+    pub primary_foreground: String,
+    pub primary_hover_background: String,
+    pub primary_active_background: String,
+    pub primary_border_color: String,
+    pub secondary_background: String,
+    pub secondary_foreground: String,
+    pub secondary_hover_background: String,
+    pub secondary_active_background: String,
+    pub secondary_border_color: String,
+    pub outline_foreground: String,
+    pub outline_hover_background: String,
+    pub outline_active_background: String,
+    pub outline_border_color: String,
+    pub outline_hover_border_color: String,
+    pub ghost_foreground: String,
+    pub ghost_hover_background: String,
+    pub ghost_active_background: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -69,9 +86,58 @@ pub struct ThemeScrollbarColors {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeCheckboxColors {
+    pub background: String,
+    pub foreground: String,
+    pub checked_background: String,
+    pub checked_foreground: String,
+    pub border: String,
+    pub checked_border: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeSwitchColors {
+    pub background: String,
+    pub foreground: String,
+    pub border_color: String,
+    pub thumb_background: String,
+    pub active_background: String,
+    pub active_foreground: String,
+    pub active_border_color: String,
+    pub active_thumb_background: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeRadioColors {
+    pub background: String,
+    pub foreground: String,
+    pub border_color: String,
+    pub active_background: String,
+    pub active_foreground: String,
+    pub active_border_color: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeInputColors {
+    pub background: String,
+    pub foreground: String,
+    pub placeholder: String,
+    pub border_color: String,
+    pub focus_border_color: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ThemeColors {
     pub workbench: Option<ThemeWorkbenchColors>,
     pub button: Option<ThemeButtonColors>,
+    pub checkbox: Option<ThemeCheckboxColors>,
+    pub switch: Option<ThemeSwitchColors>,
+    pub radio: Option<ThemeRadioColors>,
+    pub input: Option<ThemeInputColors>,
     pub scrollbar: Option<ThemeScrollbarColors>,
 }
 
@@ -516,6 +582,10 @@ fn empty_theme_colors() -> ThemeColors {
     ThemeColors {
         workbench: None,
         button: None,
+        checkbox: None,
+        switch: None,
+        radio: None,
+        input: None,
         scrollbar: None,
     }
 }
@@ -564,8 +634,40 @@ fn parse_theme_colors(content: &str) -> ThemeColors {
         .and_then(toml::Value::as_table)
         .and_then(|colors| colors.get("scrollbar"))
         .and_then(extract_scrollbar_color);
+    let checkbox = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("checkbox"))
+        .and_then(extract_checkbox_color);
+    let switch = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("switch"))
+        .and_then(extract_switch_color);
+    let radio = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("radio"))
+        .and_then(extract_radio_color);
+    let input = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("input"))
+        .and_then(extract_input_color);
 
-    ThemeColors { workbench, button, scrollbar }
+    ThemeColors {
+        workbench,
+        button,
+        checkbox,
+        switch,
+        radio,
+        input,
+        scrollbar,
+    }
 }
 
 fn extract_workbench_color(value: &toml::Value) -> Option<ThemeWorkbenchColors> {
@@ -582,12 +684,44 @@ fn extract_workbench_color(value: &toml::Value) -> Option<ThemeWorkbenchColors> 
 fn extract_button_color(value: &toml::Value) -> Option<ThemeButtonColors> {
     let table = first_color_table(value)?;
 
-    let background = table.get("background")?.as_str()?.to_owned();
-    let foreground = table.get("foreground")?.as_str()?.to_owned();
+    let primary_background = table.get("primaryBackground")?.as_str()?.to_owned();
+    let primary_foreground = table.get("primaryForeground")?.as_str()?.to_owned();
+    let primary_hover_background = table.get("primaryHoverBackground")?.as_str()?.to_owned();
+    let primary_active_background = table.get("primaryActiveBackground")?.as_str()?.to_owned();
+    let primary_border_color = table.get("primaryBorderColor")?.as_str()?.to_owned();
+    let secondary_background = table.get("secondaryBackground")?.as_str()?.to_owned();
+    let secondary_foreground = table.get("secondaryForeground")?.as_str()?.to_owned();
+    let secondary_hover_background = table.get("secondaryHoverBackground")?.as_str()?.to_owned();
+    let secondary_active_background = table.get("secondaryActiveBackground")?.as_str()?.to_owned();
+    let secondary_border_color = table.get("secondaryBorderColor")?.as_str()?.to_owned();
+    let outline_foreground = table.get("outlineForeground")?.as_str()?.to_owned();
+    let outline_hover_background = table.get("outlineHoverBackground")?.as_str()?.to_owned();
+    let outline_active_background = table.get("outlineActiveBackground")?.as_str()?.to_owned();
+    let outline_border_color = table.get("outlineBorderColor")?.as_str()?.to_owned();
+    let outline_hover_border_color = table.get("outlineHoverBorderColor")?.as_str()?.to_owned();
+    let ghost_foreground = table.get("ghostForeground")?.as_str()?.to_owned();
+    let ghost_hover_background = table.get("ghostHoverBackground")?.as_str()?.to_owned();
+    let ghost_active_background = table.get("ghostActiveBackground")?.as_str()?.to_owned();
 
     Some(ThemeButtonColors {
-        background,
-        foreground,
+        primary_background,
+        primary_foreground,
+        primary_hover_background,
+        primary_active_background,
+        primary_border_color,
+        secondary_background,
+        secondary_foreground,
+        secondary_hover_background,
+        secondary_active_background,
+        secondary_border_color,
+        outline_foreground,
+        outline_hover_background,
+        outline_active_background,
+        outline_border_color,
+        outline_hover_border_color,
+        ghost_foreground,
+        ghost_hover_background,
+        ghost_active_background,
     })
 }
 
@@ -603,6 +737,84 @@ fn extract_scrollbar_color(value: &toml::Value) -> Option<ThemeScrollbarColors> 
         thumb,
         thumb_hover,
         thumb_active,
+    })
+}
+
+fn extract_checkbox_color(value: &toml::Value) -> Option<ThemeCheckboxColors> {
+    let table = first_color_table(value)?;
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+    let checked_background = table.get("checkedBackground")?.as_str()?.to_owned();
+    let checked_foreground = table.get("checkedForeground")?.as_str()?.to_owned();
+    let border = table.get("border")?.as_str()?.to_owned();
+    let checked_border = table.get("checkedBorder")?.as_str()?.to_owned();
+
+    Some(ThemeCheckboxColors {
+        background,
+        foreground,
+        checked_background,
+        checked_foreground,
+        border,
+        checked_border,
+    })
+}
+
+fn extract_switch_color(value: &toml::Value) -> Option<ThemeSwitchColors> {
+    let table = first_color_table(value)?;
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+    let border_color = table.get("borderColor")?.as_str()?.to_owned();
+    let thumb_background = table.get("thumbBackground")?.as_str()?.to_owned();
+    let active_background = table.get("activeBackground")?.as_str()?.to_owned();
+    let active_foreground = table.get("activeForeground")?.as_str()?.to_owned();
+    let active_border_color = table.get("activeBorderColor")?.as_str()?.to_owned();
+    let active_thumb_background = table.get("activeThumbBackground")?.as_str()?.to_owned();
+
+    Some(ThemeSwitchColors {
+        background,
+        foreground,
+        border_color,
+        thumb_background,
+        active_background,
+        active_foreground,
+        active_border_color,
+        active_thumb_background,
+    })
+}
+
+fn extract_radio_color(value: &toml::Value) -> Option<ThemeRadioColors> {
+    let table = first_color_table(value)?;
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+    let border_color = table.get("borderColor")?.as_str()?.to_owned();
+    let active_background = table.get("activeBackground")?.as_str()?.to_owned();
+    let active_foreground = table.get("activeForeground")?.as_str()?.to_owned();
+    let active_border_color = table.get("activeBorderColor")?.as_str()?.to_owned();
+
+    Some(ThemeRadioColors {
+        background,
+        foreground,
+        border_color,
+        active_background,
+        active_foreground,
+        active_border_color,
+    })
+}
+
+fn extract_input_color(value: &toml::Value) -> Option<ThemeInputColors> {
+    let table = first_color_table(value)?;
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+    let placeholder = table.get("placeholder")?.as_str()?.to_owned();
+    let border_color = table.get("borderColor")?.as_str()?.to_owned();
+    let focus_border_color = table.get("focusBorderColor")?.as_str()?.to_owned();
+
+    Some(ThemeInputColors {
+        background,
+        foreground,
+        placeholder,
+        border_color,
+        focus_border_color,
     })
 }
 
@@ -997,7 +1209,7 @@ mod tests {
     use super::{
         builtin_marketplace, list_extensions_from_dir,
         list_themes_from_dir, load_extensions_from_dir, resolve_theme_identifier_from_dir,
-        search_extensions_in_dir,
+        parse_theme_colors, search_extensions_in_dir,
         set_extension_enabled_in_dir, uninstall_extension_in_dir,
         SearchExtensionsFilter,
     };
@@ -1006,6 +1218,40 @@ mod tests {
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
     };
+
+    #[test]
+    fn parses_new_button_primary_keys() {
+        let colors = parse_theme_colors(
+            "[[colors.workbench]]\nbackground = \"#111\"\nforeground = \"#eee\"\n\n[[colors.button]]\nprimaryBackground = \"#0af\"\nprimaryForeground = \"#000\"\nprimaryHoverBackground = \"#19f\"\nprimaryActiveBackground = \"#08d\"\nprimaryBorderColor = \"#0000\"\nsecondaryBackground = \"#222\"\nsecondaryForeground = \"#fff\"\nsecondaryHoverBackground = \"#333\"\nsecondaryActiveBackground = \"#111\"\nsecondaryBorderColor = \"#444\"\noutlineForeground = \"#ddd\"\noutlineHoverBackground = \"#2a2a2a\"\noutlineActiveBackground = \"#1f1f1f\"\noutlineBorderColor = \"#555\"\noutlineHoverBorderColor = \"#666\"\nghostForeground = \"#ccc\"\nghostHoverBackground = \"#2b2b2b\"\nghostActiveBackground = \"#202020\"\n\n[[colors.checkbox]]\nbackground = \"#121212\"\nforeground = \"#f1f1f1\"\ncheckedBackground = \"#12ab89\"\ncheckedForeground = \"#090909\"\nborder = \"#3a3a3a\"\ncheckedBorder = \"#12ab89\"\n\n[[colors.switch]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nborderColor = \"#404040\"\nthumbBackground = \"#b8b8b8\"\nactiveBackground = \"#12ab89\"\nactiveForeground = \"#090909\"\nactiveBorderColor = \"#12ab89\"\nactiveThumbBackground = \"#ffffff\"\n\n[[colors.radio]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nborderColor = \"#404040\"\nactiveBackground = \"#12ab89\"\nactiveForeground = \"#090909\"\nactiveBorderColor = \"#12ab89\"\n\n[[colors.input]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nplaceholder = \"#888\"\nborderColor = \"#404040\"\nfocusBorderColor = \"#12ab89\"\n",
+        );
+
+        let button = colors.button.expect("button colors should parse");
+        assert_eq!(button.primary_background, "#0af");
+        assert_eq!(button.primary_foreground, "#000");
+        assert_eq!(button.secondary_background, "#222");
+        assert_eq!(button.outline_hover_border_color, "#666");
+        assert_eq!(button.ghost_active_background, "#202020");
+
+        let checkbox = colors.checkbox.expect("checkbox colors should parse");
+        assert_eq!(checkbox.background, "#121212");
+        assert_eq!(checkbox.checked_background, "#12ab89");
+        assert_eq!(checkbox.checked_border, "#12ab89");
+
+        let switch = colors.switch.expect("switch colors should parse");
+        assert_eq!(switch.background, "#161616");
+        assert_eq!(switch.active_background, "#12ab89");
+        assert_eq!(switch.active_thumb_background, "#ffffff");
+
+        let radio = colors.radio.expect("radio colors should parse");
+        assert_eq!(radio.background, "#161616");
+        assert_eq!(radio.active_foreground, "#090909");
+        assert_eq!(radio.active_border_color, "#12ab89");
+
+        let input = colors.input.expect("input colors should parse");
+        assert_eq!(input.background, "#161616");
+        assert_eq!(input.placeholder, "#888");
+        assert_eq!(input.focus_border_color, "#12ab89");
+    }
 
     fn unique_test_dir() -> PathBuf {
         let nanos = SystemTime::now()

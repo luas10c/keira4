@@ -3,8 +3,60 @@ background = "#1b1d1d"
 foreground = "#eefcfd"
 
 [[colors.button]]
-background = "#1fb5d6"
-foreground = "#090b0b"
+primaryBackground = "#1FB5D6"
+primaryForeground = "#090B0B"
+primaryHoverBackground = "#35C3E2"
+primaryActiveBackground = "#169AB7"
+primaryBorderColor = "#00000000"
+
+secondaryBackground = "#13252B"
+secondaryForeground = "#F2FBFD"
+secondaryHoverBackground = "#1A3138"
+secondaryActiveBackground = "#0E1B20"
+secondaryBorderColor = "#2E4A52"
+
+outlineForeground = "#DDF8FE"
+outlineHoverBackground = "#12333B"
+outlineActiveBackground = "#18424C"
+outlineBorderColor = "#1FB5D673"
+outlineHoverBorderColor = "#1FB5D6"
+
+ghostForeground = "#DDF8FE"
+ghostHoverBackground = "#102A31"
+ghostActiveBackground = "#153840"
+
+[[colors.checkbox]]
+background = "#202425"
+foreground = "#eefcfd"
+checkedBackground = "#1FB5D6"
+checkedForeground = "#090B0B"
+border = "#333A3C"
+checkedBorder = "#1FB5D6"
+
+[[colors.switch]]
+background = "#202425"
+foreground = "#eefcfd"
+borderColor = "#333A3C"
+thumbBackground = "#AAB7BA"
+activeBackground = "#1FB5D6"
+activeForeground = "#090B0B"
+activeBorderColor = "#1FB5D6"
+activeThumbBackground = "#FFFFFF"
+
+[[colors.radio]]
+background = "#202425"
+foreground = "#EEFCFD"
+borderColor = "#333A3C"
+activeBackground = "#1FB5D6"
+activeForeground = "#090B0B"
+activeBorderColor = "#1FB5D6"
+
+[[colors.input]]
+background = "#202425"
+foreground = "#EEFCFD"
+placeholder = "#AAB7BA"
+borderColor = "#333A3C"
+focusBorderColor = "#1FB5D6"
 
 [[colors.scrollbar]]
 track = "#1b1d1d"

@@ -3,8 +3,60 @@ background = "#1b1d1d"
 foreground = "#eefcfd"
 
 [[colors.button]]
-background = "#38C172"
-foreground = "#090b0b"
+primaryBackground = "#38C172"
+primaryForeground = "#090B0B"
+primaryHoverBackground = "#45D381"
+primaryActiveBackground = "#2FA764"
+primaryBorderColor = "#00000000"
+
+secondaryBackground = "#1F2933"
+secondaryForeground = "#F4F7F7"
+secondaryHoverBackground = "#273544"
+secondaryActiveBackground = "#18222D"
+secondaryBorderColor = "#334155"
+
+outlineForeground = "#D7F7EF"
+outlineHoverBackground = "#143326"
+outlineActiveBackground = "#1A4531"
+outlineBorderColor = "#38C17273"
+outlineHoverBorderColor = "#38C172"
+
+ghostForeground = "#D7F7EF"
+ghostHoverBackground = "#123024"
+ghostActiveBackground = "#173C2C"
+
+[[colors.checkbox]]
+background = "#232626"
+foreground = "#eefcfd"
+checkedBackground = "#38C172"
+checkedForeground = "#090B0B"
+border = "#343838"
+checkedBorder = "#38C172"
+
+[[colors.switch]]
+background = "#202323"
+foreground = "#eefcfd"
+borderColor = "#343838"
+thumbBackground = "#AAB7BA"
+activeBackground = "#38C172"
+activeForeground = "#090B0B"
+activeBorderColor = "#38C172"
+activeThumbBackground = "#FFFFFF"
+
+[[colors.radio]]
+background = "#202323"
+foreground = "#EEFCFD"
+borderColor = "#343838"
+activeBackground = "#38C172"
+activeForeground = "#090B0B"
+activeBorderColor = "#38C172"
+
+[[colors.input]]
+background = "#202323"
+foreground = "#EEFCFD"
+placeholder = "#AAB7BA"
+borderColor = "#343838"
+focusBorderColor = "#38C172"
 
 [[colors.scrollbar]]
 track = "#1b1d1d"
