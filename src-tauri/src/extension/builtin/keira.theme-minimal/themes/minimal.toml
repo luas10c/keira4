@@ -58,6 +58,11 @@ placeholder = "#AAB7BA"
 borderColor = "#333A3C"
 focusBorderColor = "#1FB5D6"
 
+[[colors.selection]]
+background = "#D4F5F9"
+foreground = "#090B0B"
+borderColor = "#1FB5D6"
+
 [[colors.scrollbar]]
 track = "#1b1d1d"
 thumb = "#2f3635"

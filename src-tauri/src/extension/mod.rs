@@ -131,6 +131,14 @@ pub struct ThemeInputColors {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeSelectionColors {
+    pub background: String,
+    pub foreground: String,
+    pub border_color: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ThemeColors {
     pub workbench: Option<ThemeWorkbenchColors>,
     pub button: Option<ThemeButtonColors>,
@@ -138,6 +146,7 @@ pub struct ThemeColors {
     pub switch: Option<ThemeSwitchColors>,
     pub radio: Option<ThemeRadioColors>,
     pub input: Option<ThemeInputColors>,
+    pub selection: Option<ThemeSelectionColors>,
     pub scrollbar: Option<ThemeScrollbarColors>,
 }
 
@@ -586,6 +595,7 @@ fn empty_theme_colors() -> ThemeColors {
         switch: None,
         radio: None,
         input: None,
+        selection: None,
         scrollbar: None,
     }
 }
@@ -658,6 +668,12 @@ fn parse_theme_colors(content: &str) -> ThemeColors {
         .and_then(toml::Value::as_table)
         .and_then(|colors| colors.get("input"))
         .and_then(extract_input_color);
+    let selection = value
+        .as_ref()
+        .and_then(|root| root.get("colors"))
+        .and_then(toml::Value::as_table)
+        .and_then(|colors| colors.get("selection"))
+        .and_then(extract_selection_color);
 
     ThemeColors {
         workbench,
@@ -666,6 +682,7 @@ fn parse_theme_colors(content: &str) -> ThemeColors {
         switch,
         radio,
         input,
+        selection,
         scrollbar,
     }
 }
@@ -815,6 +832,19 @@ fn extract_input_color(value: &toml::Value) -> Option<ThemeInputColors> {
         placeholder,
         border_color,
         focus_border_color,
+    })
+}
+
+fn extract_selection_color(value: &toml::Value) -> Option<ThemeSelectionColors> {
+    let table = first_color_table(value)?;
+    let background = table.get("background")?.as_str()?.to_owned();
+    let foreground = table.get("foreground")?.as_str()?.to_owned();
+    let border_color = table.get("borderColor")?.as_str()?.to_owned();
+
+    Some(ThemeSelectionColors {
+        background,
+        foreground,
+        border_color,
     })
 }
 
@@ -1222,7 +1252,7 @@ mod tests {
     #[test]
     fn parses_new_button_primary_keys() {
         let colors = parse_theme_colors(
-            "[[colors.workbench]]\nbackground = \"#111\"\nforeground = \"#eee\"\n\n[[colors.button]]\nprimaryBackground = \"#0af\"\nprimaryForeground = \"#000\"\nprimaryHoverBackground = \"#19f\"\nprimaryActiveBackground = \"#08d\"\nprimaryBorderColor = \"#0000\"\nsecondaryBackground = \"#222\"\nsecondaryForeground = \"#fff\"\nsecondaryHoverBackground = \"#333\"\nsecondaryActiveBackground = \"#111\"\nsecondaryBorderColor = \"#444\"\noutlineForeground = \"#ddd\"\noutlineHoverBackground = \"#2a2a2a\"\noutlineActiveBackground = \"#1f1f1f\"\noutlineBorderColor = \"#555\"\noutlineHoverBorderColor = \"#666\"\nghostForeground = \"#ccc\"\nghostHoverBackground = \"#2b2b2b\"\nghostActiveBackground = \"#202020\"\n\n[[colors.checkbox]]\nbackground = \"#121212\"\nforeground = \"#f1f1f1\"\ncheckedBackground = \"#12ab89\"\ncheckedForeground = \"#090909\"\nborder = \"#3a3a3a\"\ncheckedBorder = \"#12ab89\"\n\n[[colors.switch]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nborderColor = \"#404040\"\nthumbBackground = \"#b8b8b8\"\nactiveBackground = \"#12ab89\"\nactiveForeground = \"#090909\"\nactiveBorderColor = \"#12ab89\"\nactiveThumbBackground = \"#ffffff\"\n\n[[colors.radio]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nborderColor = \"#404040\"\nactiveBackground = \"#12ab89\"\nactiveForeground = \"#090909\"\nactiveBorderColor = \"#12ab89\"\n\n[[colors.input]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nplaceholder = \"#888\"\nborderColor = \"#404040\"\nfocusBorderColor = \"#12ab89\"\n",
+            "[[colors.workbench]]\nbackground = \"#111\"\nforeground = \"#eee\"\n\n[[colors.button]]\nprimaryBackground = \"#0af\"\nprimaryForeground = \"#000\"\nprimaryHoverBackground = \"#19f\"\nprimaryActiveBackground = \"#08d\"\nprimaryBorderColor = \"#0000\"\nsecondaryBackground = \"#222\"\nsecondaryForeground = \"#fff\"\nsecondaryHoverBackground = \"#333\"\nsecondaryActiveBackground = \"#111\"\nsecondaryBorderColor = \"#444\"\noutlineForeground = \"#ddd\"\noutlineHoverBackground = \"#2a2a2a\"\noutlineActiveBackground = \"#1f1f1f\"\noutlineBorderColor = \"#555\"\noutlineHoverBorderColor = \"#666\"\nghostForeground = \"#ccc\"\nghostHoverBackground = \"#2b2b2b\"\nghostActiveBackground = \"#202020\"\n\n[[colors.checkbox]]\nbackground = \"#121212\"\nforeground = \"#f1f1f1\"\ncheckedBackground = \"#12ab89\"\ncheckedForeground = \"#090909\"\nborder = \"#3a3a3a\"\ncheckedBorder = \"#12ab89\"\n\n[[colors.switch]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nborderColor = \"#404040\"\nthumbBackground = \"#b8b8b8\"\nactiveBackground = \"#12ab89\"\nactiveForeground = \"#090909\"\nactiveBorderColor = \"#12ab89\"\nactiveThumbBackground = \"#ffffff\"\n\n[[colors.radio]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nborderColor = \"#404040\"\nactiveBackground = \"#12ab89\"\nactiveForeground = \"#090909\"\nactiveBorderColor = \"#12ab89\"\n\n[[colors.input]]\nbackground = \"#161616\"\nforeground = \"#f8f8f8\"\nplaceholder = \"#888\"\nborderColor = \"#404040\"\nfocusBorderColor = \"#12ab89\"\n\n[[colors.selection]]\nbackground = \"#12ab89\"\nforeground = \"#090909\"\nborderColor = \"#12ab89\"\n",
         );
 
         let button = colors.button.expect("button colors should parse");
@@ -1251,6 +1281,11 @@ mod tests {
         assert_eq!(input.background, "#161616");
         assert_eq!(input.placeholder, "#888");
         assert_eq!(input.focus_border_color, "#12ab89");
+
+        let selection = colors.selection.expect("selection colors should parse");
+        assert_eq!(selection.background, "#12ab89");
+        assert_eq!(selection.foreground, "#090909");
+        assert_eq!(selection.border_color, "#12ab89");
     }
 
     fn unique_test_dir() -> PathBuf {
