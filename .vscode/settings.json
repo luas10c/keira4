@@ -1,4 +1,9 @@
 {
   "editor.tabSize": 2,
-  "editor.rulers": [80, 120]
+  "editor.rulers": [80, 120],
+
+  "[svg]": {
+    "editor.defaultFormatter": "vscode.emmet",
+    "editor.formatOnSave": true,
+  }
 }
