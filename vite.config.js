@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import svgr from '@svgr/rollup'
 import tailwindcss from '@tailwindcss/vite'
